@@ -11,6 +11,7 @@ import com.cloudbox.model.ClusterStatus;
 import com.cloudbox.model.LeaderInfo;
 import com.cloudbox.model.PartitionStatus;
 
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -158,5 +159,23 @@ public class ClusterCoordinator {
      */
     public int getNodeId() {
         return nodeId;
+    }
+
+    /**
+     * Propose a value for atomic broadcast.
+     * Delegates to ConsensusManager.
+     */
+    public com.cloudbox.model.ConsensusProposal propose(String data) throws Exception {
+        return consensusManager.propose(data);
+    }
+
+    /**
+     * Cleanup on application shutdown.
+     * Gracefully stops cluster coordination.
+     */
+    @PreDestroy
+    public void shutdown() {
+        log.info("Shutting down cluster coordination on application shutdown");
+        stopClusterCoordination();
     }
 }
