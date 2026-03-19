@@ -1,0 +1,33 @@
+# ── OS files ──────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE / Editor ──────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# ── Java / Maven ──────────────────────────────────────
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+target/
+hs_err_pid*
+replay_pid*
+
+# ── Node / Frontend ───────────────────────────────────
+node_modules/
+dist/
+*.local
+npm-debug.log*
+
+# ── Misc ──────────────────────────────────────────────
+*.log
+*.zip
+*.tar.gz
+*.rar
