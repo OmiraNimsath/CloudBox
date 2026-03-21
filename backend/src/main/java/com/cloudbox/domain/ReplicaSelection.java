@@ -1,4 +1,4 @@
-package com.cloudbox.domain.replication;
+package com.cloudbox.domain;
 
 import java.util.List;
 

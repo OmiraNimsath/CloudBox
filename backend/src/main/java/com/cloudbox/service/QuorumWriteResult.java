@@ -1,8 +1,8 @@
-package com.cloudbox.service.replication;
+package com.cloudbox.service;
 
 import java.util.Set;
 
-import com.cloudbox.domain.replication.ConsistencyModel;
+import com.cloudbox.domain.ConsistencyModel;
 
 /**
  * Outcome of a quorum write operation.

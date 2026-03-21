@@ -1,4 +1,4 @@
-package com.cloudbox.service.replication;
+package com.cloudbox.service;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -13,7 +13,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 
 import com.cloudbox.config.ReplicationProperties;
-import com.cloudbox.domain.replication.ReplicaSelection;
+import com.cloudbox.domain.ReplicaSelection;
 
 @Service
 @ConditionalOnBean({

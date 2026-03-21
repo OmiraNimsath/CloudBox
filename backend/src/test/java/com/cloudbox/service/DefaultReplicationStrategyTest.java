@@ -1,15 +1,14 @@
-package com.cloudbox.service.replication;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
+package com.cloudbox.service;
 
 import java.time.Duration;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.api.Test;
 
 import com.cloudbox.config.ReplicationProperties;
-import com.cloudbox.domain.replication.ConsistencyModel;
-import com.cloudbox.domain.replication.ReplicaSelection;
+import com.cloudbox.domain.ConsistencyModel;
+import com.cloudbox.domain.ReplicaSelection;
 import com.cloudbox.model.NodeStatus;
 
 class DefaultReplicationStrategyTest {

@@ -1,4 +1,4 @@
-package com.cloudbox.domain.replication;
+package com.cloudbox.domain;
 
 /**
  * Replication consistency contract used by the write and read paths.

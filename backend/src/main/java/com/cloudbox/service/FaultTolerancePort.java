@@ -1,4 +1,4 @@
-package com.cloudbox.service.replication;
+package com.cloudbox.service;
 
 /**
  * Port for node health and failure tracking.

@@ -1,9 +1,9 @@
-package com.cloudbox.service.replication;
+package com.cloudbox.service;
 
 import java.util.List;
 
+import com.cloudbox.domain.ReplicaSelection;
 import com.cloudbox.model.NodeStatus;
-import com.cloudbox.domain.replication.ReplicaSelection;
 
 /**
  * Decides which replicas should receive write operations.

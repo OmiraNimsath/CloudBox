@@ -1,4 +1,4 @@
-package com.cloudbox.service.replication;
+package com.cloudbox.service;
 
 /**
  * Raised when a write cannot achieve quorum within configured retries.
