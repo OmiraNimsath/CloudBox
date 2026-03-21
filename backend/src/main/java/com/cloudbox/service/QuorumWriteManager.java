@@ -5,7 +5,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -129,8 +131,11 @@ public class QuorumWriteManager {
 
         try {
             allWrites.get(replicationProperties.getWriteTimeout().toMillis(), TimeUnit.MILLISECONDS);
-        } catch (Exception timeoutOrFailure) {
+        } catch (TimeoutException | ExecutionException timeoutOrFailure) {
             log.warn("Replication attempt ended before all writes completed: reason={}", timeoutOrFailure.getClass().getSimpleName());
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+            log.warn("Replication attempt interrupted while awaiting acknowledgements");
         }
 
         Set<Integer> acknowledgedNodeIds = new LinkedHashSet<>();

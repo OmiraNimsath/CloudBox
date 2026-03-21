@@ -30,6 +30,7 @@ class QuorumWriteManagerTest {
 
     private QuorumWriteManager quorumWriteManager;
 
+        @SuppressWarnings("unused")
     @BeforeEach
     void setUp() {
         replicationStrategy = Mockito.mock(ReplicationStrategy.class);
@@ -96,8 +97,9 @@ class QuorumWriteManagerTest {
                 .when(storageModulePort)
                 .persistReplica(eq(2), eq("file-b"), any(byte[].class), eq(200L));
 
-        assertThrows(QuorumWriteException.class,
+        QuorumWriteException quorumWriteException = assertThrows(QuorumWriteException.class,
                 () -> quorumWriteManager.replicateWrite("file-b", "payload".getBytes()));
+        assertEquals("Failed to reach quorum for fileId=file-b after 4 attempts", quorumWriteException.getMessage());
 
         verify(storageModulePort, times(4)).persistReplica(eq(1), eq("file-b"), any(byte[].class), eq(200L));
         verify(storageModulePort, times(4)).persistReplica(eq(2), eq("file-b"), any(byte[].class), eq(200L));
