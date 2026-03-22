@@ -1,16 +1,11 @@
 package com.cloudbox;
 
-import com.cloudbox.controller.TimeSyncController;
-import com.cloudbox.model.*;
 import com.cloudbox.service.SkewDetector;
 import com.cloudbox.service.TimeSyncService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.*;
@@ -23,15 +18,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Tests all endpoints and their integration with backend services.
  */
 @SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
 class TimeSyncControllerIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     @Autowired
     private TimeSyncService timeSyncService;
@@ -99,13 +89,9 @@ class TimeSyncControllerIntegrationTest {
 
     @Test
     void testGetCurrentTime() throws Exception {
-        long before = System.currentTimeMillis();
-
         mockMvc.perform(get("/api/timesync/time"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(notNullValue()));
-
-        long after = System.currentTimeMillis();
     }
 
     @Test
