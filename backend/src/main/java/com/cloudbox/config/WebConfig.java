@@ -1,5 +1,6 @@
 package com.cloudbox.config;
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
@@ -15,6 +16,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * Provides RestTemplate bean for inter-node HTTP communication.
  */
 @Configuration
+@EnableConfigurationProperties({TimeSyncProperties.class})
 public class WebConfig {
 
     @Bean
