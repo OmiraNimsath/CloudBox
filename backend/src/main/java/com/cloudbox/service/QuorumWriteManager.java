@@ -18,12 +18,6 @@ import com.cloudbox.config.ReplicationProperties;
 import com.cloudbox.domain.ReplicaSelection;
 
 @Service
-@ConditionalOnBean({
-    ConsensusModulePort.class,
-    FaultTolerancePort.class,
-    StorageModulePort.class,
-    TimeSyncPort.class
-})
 public class QuorumWriteManager {
 
     private static final Logger log = LoggerFactory.getLogger(QuorumWriteManager.class);

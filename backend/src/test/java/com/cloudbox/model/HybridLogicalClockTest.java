@@ -40,7 +40,7 @@ class HybridLogicalClockTest {
     }
 
     @Test
-    void testUpdateSend_NewPhysicalTime() {
+    void testUpdateSend_NewPhysicalTime() throws InterruptedException {
         long oldPhysicalTime = hlc.getPhysicalTime();
         Thread.sleep(10); // Ensure time advances
         hlc.updateSend(1);
@@ -64,7 +64,7 @@ class HybridLogicalClockTest {
     }
 
     @Test
-    void testUpdateReceive_NewPhysicalTime() {
+    void testUpdateReceive_NewPhysicalTime() throws InterruptedException {
         HybridLogicalClock remote = HybridLogicalClock.builder()
                 .physicalTime(500L)
                 .logicalCounter(5)
