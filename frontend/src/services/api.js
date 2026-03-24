@@ -45,7 +45,7 @@ export async function downloadFile(filePath) {
  */
 export async function listFiles(prefix = '/') {
   const res = await api.get('/files/list', { params: { path: prefix } });
-  return res.data;
+  return res.data.data;
 }
 
 /**
@@ -61,20 +61,38 @@ export async function deleteFile(filePath) {
 
 /** Get cluster-wide health overview. */
 export async function getClusterStatus() {
-  const res = await api.get('/cluster/status');
-  return res.data;
+  const res = await api.get('/cluster/consensus/status');
+  const data = res.data.data;
+  
+  // Transform data format for frontend expectations { nodes: [{id, status, role}] }
+  const nodes = [];
+  let alive = 0;
+  if (data && data.nodeStatuses) {
+    for (const [id, status] of Object.entries(data.nodeStatuses)) {
+      const isAlive = status === 'HEALTHY' || status === 'ACTIVE';
+      if (isAlive) alive++;
+      nodes.push({
+        id: parseInt(id),
+        status: isAlive ? 'alive' : 'dead',
+        isLeader: data.leader?.leaderId === parseInt(id)
+      });
+    }
+  }
+  return { ...data, nodes, alive, total: Object.keys(data?.nodeStatuses || {}).length };
 }
 
 /** Get consensus / leader info. */
 export async function getConsensusStatus() {
-  const res = await api.get('/cluster/consensus');
-  return res.data;
+  const res = await api.get('/cluster/consensus/leader');
+  const data = res.data.data;
+  return { ...data, leader: data?.leaderId, epoch: data?.electionEpoch };
 }
 
 /** Get time synchronization info. */
 export async function getTimeSyncStatus() {
-  const res = await api.get('/cluster/time-sync');
-  return res.data;
+  const res = await api.get('/timesync/status');
+  const data = res.data.data;
+  return { ...data, offset: (data?.maxClockSkew || 0) / 1000, lastSync: data?.lastSyncAt };
 }
 
 // ── Admin / simulation ───────────────────────────────────────────

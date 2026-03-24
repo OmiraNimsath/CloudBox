@@ -22,7 +22,7 @@ export default function Dashboard({ uploadModalOpen, setUploadModalOpen }) {
     setError('');
     try {
       const data = await listFiles(path);
-      setEntries(data.entries ?? data);
+      setEntries(Array.isArray(data) ? data : (data?.entries ?? []));
     } catch {
       setError('Failed to load files');
       setEntries([]);
