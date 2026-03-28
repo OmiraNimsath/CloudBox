@@ -9,12 +9,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
-import com.cloudbox.model.RecoveryTask;
-
 import org.springframework.stereotype.Service;
 
 import com.cloudbox.model.FaultStatus;
 import com.cloudbox.model.NodeHealth;
+import com.cloudbox.model.RecoveryTask;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -125,7 +124,7 @@ public class FaultToleranceManagerImpl implements FaultToleranceManager {
      * Determine overall cluster state based on healthy/failed node counts.
      */
     private String determineClusterState(int healthyCount, int failedCount, int totalNodes) {
-        if (healthyCount == totalNodes) {
+        if (failedCount == 0) {
             return "HEALTHY";
         } else if (healthyCount >= Math.ceil(totalNodes / 2.0)) {
             return "DEGRADED";
