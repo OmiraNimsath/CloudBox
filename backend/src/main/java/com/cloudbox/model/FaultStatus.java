@@ -33,4 +33,10 @@ public class FaultStatus {
     private String lastHeartbeatTime;
     private String failureDetectionStatus; // ENABLED, DISABLED, ERROR
     private List<String> recentFailures; // list of recently detected failures
+
+    // Reliability metrics (Lecture 4 — Fault Tolerance)
+    private double mttfSeconds;           // Mean Time To Failure: avg uptime between failures
+    private double mttrSeconds;           // Mean Time To Repair: avg completed recovery duration
+    private double availabilityPercentage; // A = MTTF / (MTTF + MTTR) × 100
+    private String availabilityLabel;     // e.g. "Four Nines (99.99%)"
 }

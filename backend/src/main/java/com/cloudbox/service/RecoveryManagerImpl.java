@@ -181,10 +181,30 @@ public class RecoveryManagerImpl implements RecoveryManager {
     
     @Override
     public int getUnderReplicatedFileCount() {
-        // Count files with replication factor less than expected
-        // This is a simplified implementation - actual implementation would
-        // query the storage/replication system
-        return 0;
+        try {
+            List<FileMetadata> files = storageModulePort.listFiles();
+            int underReplicated = 0;
+            for (FileMetadata meta : files) {
+                int replicaCount = 0;
+                for (int nodeId = 1; nodeId <= expectedReplicationFactor; nodeId++) {
+                    try {
+                        byte[] data = storageModulePort.retrieveReplica(nodeId, meta.getName());
+                        if (data != null && data.length > 0) {
+                            replicaCount++;
+                        }
+                    } catch (Exception ignored) {
+                        // node unreachable or replica absent — counts as missing
+                    }
+                }
+                if (replicaCount < expectedReplicationFactor) {
+                    underReplicated++;
+                }
+            }
+            return underReplicated;
+        } catch (Exception e) {
+            log.warn("Could not determine under-replicated file count: {}", e.getMessage());
+            return 0;
+        }
     }
     
     @Override

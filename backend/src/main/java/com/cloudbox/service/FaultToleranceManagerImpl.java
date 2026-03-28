@@ -1,11 +1,15 @@
 package com.cloudbox.service;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+
+import com.cloudbox.model.RecoveryTask;
 
 import org.springframework.stereotype.Service;
 
@@ -30,10 +34,15 @@ public class FaultToleranceManagerImpl implements FaultToleranceManager {
     
     private final AtomicBoolean initialized = new AtomicBoolean(false);
     private final AtomicBoolean enabled = new AtomicBoolean(true);
-    
+    /** Wall-clock millis when the fault-tolerance system was initialized. */
+    private volatile long systemStartMs = 0;
+    /** Running count of node failures detected since startup. */
+    private final AtomicLong totalFailureCount = new AtomicLong(0);
+
     @Override
     public void initialize() {
         if (initialized.compareAndSet(false, true)) {
+            systemStartMs = System.currentTimeMillis();
             failureDetectionService.initialize();
             recoveryManager.initialize();
             log.info("Fault tolerance system initialized");
@@ -79,8 +88,12 @@ public class FaultToleranceManagerImpl implements FaultToleranceManager {
             .lastHeartbeatTime(getLastHeartbeatTime())
             .failureDetectionStatus(getFailureDetectionStatus())
             .recentFailures(extractRecentFailures(nodeHealthMap))
+            .mttfSeconds(calculateMttf(failedCount))
+            .mttrSeconds(calculateMttr(recoveryManager.getCompletedRecoveryTasks()))
+            .availabilityPercentage(calculateAvailability(calculateMttf(failedCount), calculateMttr(recoveryManager.getCompletedRecoveryTasks())))
+            .availabilityLabel(availabilityLabel(calculateAvailability(calculateMttf(failedCount), calculateMttr(recoveryManager.getCompletedRecoveryTasks()))))
             .build();
-        
+
         return status;
     }
     
@@ -169,6 +182,49 @@ public class FaultToleranceManagerImpl implements FaultToleranceManager {
         }
     }
     
+    /**
+     * MTTF = total uptime / number of failures observed.
+     * Returns uptime in seconds when no failures have occurred yet.
+     */
+    private double calculateMttf(int currentFailedCount) {
+        long uptimeSeconds = (System.currentTimeMillis() - (systemStartMs == 0 ? System.currentTimeMillis() : systemStartMs)) / 1000;
+        long failures = totalFailureCount.updateAndGet(prev -> Math.max(prev, currentFailedCount));
+        if (failures == 0) return uptimeSeconds > 0 ? uptimeSeconds : 3600.0;
+        return (double) uptimeSeconds / failures;
+    }
+
+    /**
+     * MTTR = average duration of completed recovery tasks in seconds.
+     */
+    private double calculateMttr(List<RecoveryTask> completedTasks) {
+        return completedTasks.stream()
+            .filter(t -> t.getStartedAt() != null && t.getCompletedAt() != null)
+            .mapToLong(t -> ChronoUnit.SECONDS.between(t.getStartedAt(), t.getCompletedAt()))
+            .average()
+            .orElse(30.0); // default 30 s estimate when no tasks completed yet
+    }
+
+    /**
+     * Steady-state availability: A = MTTF / (MTTF + MTTR) × 100.
+     */
+    private double calculateAvailability(double mttf, double mttr) {
+        double denom = mttf + mttr;
+        if (denom == 0) return 100.0;
+        return (mttf / denom) * 100.0;
+    }
+
+    /**
+     * Human-readable availability tier label.
+     */
+    private String availabilityLabel(double availPct) {
+        if (availPct >= 99.999) return "Five Nines (99.999%)";
+        if (availPct >= 99.99)  return "Four Nines (99.99%)";
+        if (availPct >= 99.9)   return "Three Nines (99.9%)";
+        if (availPct >= 99.0)   return "Two Nines (99%)";
+        if (availPct >= 95.0)   return "High Availability (95%)";
+        return String.format("Degraded (%.1f%%)", availPct);
+    }
+
     /**
      * Extract recent failures from node health data.
      */
