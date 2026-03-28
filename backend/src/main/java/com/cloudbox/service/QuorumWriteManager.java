@@ -96,6 +96,102 @@ public class QuorumWriteManager {
                 maxAttempts));
     }
 
+    public QuorumWriteResult quorumDelete(String fileId) {
+        if (fileId == null || fileId.trim().isEmpty()) {
+            throw new IllegalArgumentException("fileId must not be blank");
+        }
+
+        int leaderNodeId = consensusModulePort.getCurrentLeaderNodeId();
+        ReplicaSelection selection = replicationStrategy.selectWriteReplicas(
+                leaderNodeId,
+                consensusModulePort.getClusterNodes());
+
+        long logicalTimestamp = timeSyncPort.currentLogicalTimestamp();
+
+        int maxAttempts = replicationProperties.getRetryCount() + 1;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            Set<Integer> acknowledgedNodeIds = deleteAttempt(selection, fileId);
+            if (acknowledgedNodeIds.size() >= selection.requiredAcknowledgements()) {
+                log.info(
+                        "Quorum delete successful: fileId={}, attempt={}, acknowledged={}/{} nodes={}, timestamp={}",
+                        fileId,
+                        attempt,
+                        acknowledgedNodeIds.size(),
+                        selection.requiredAcknowledgements(),
+                        acknowledgedNodeIds,
+                        logicalTimestamp);
+
+                return new QuorumWriteResult(
+                        fileId,
+                        selection.consistencyModel(),
+                        selection.requiredAcknowledgements(),
+                        acknowledgedNodeIds,
+                        logicalTimestamp,
+                        attempt);
+            }
+
+            log.warn(
+                    "Quorum delete below threshold: fileId={}, attempt={}, acknowledged={}/{}",
+                    fileId,
+                    attempt,
+                    acknowledgedNodeIds.size(),
+                    selection.requiredAcknowledgements());
+        }
+
+        throw new QuorumWriteException(String.format(
+                "Failed to reach quorum for delete operation on fileId=%s after %d attempts",
+                fileId,
+                maxAttempts));
+    }
+
+    private Set<Integer> deleteAttempt(ReplicaSelection selection, String fileId) {
+        List<CompletableFuture<Integer>> deletionFutures = new ArrayList<>();
+
+        for (int nodeId : selection.targetNodeIds()) {
+            if (!faultTolerancePort.isNodeWritable(nodeId)) {
+                log.debug("Skipping non-writable node: nodeId={}", nodeId);
+                continue;
+            }
+
+            CompletableFuture<Integer> nodeDeleteFuture = CompletableFuture.supplyAsync(() -> {
+                try {
+                    storageModulePort.deleteReplica(nodeId, fileId);
+                    return nodeId;
+                } catch (Exception exception) {
+                    faultTolerancePort.recordReplicationFailure(nodeId, exception);
+                    throw new RuntimeException(exception);
+                }
+            });
+            deletionFutures.add(nodeDeleteFuture);
+        }
+
+        if (deletionFutures.isEmpty()) {
+            return Set.of();
+        }
+
+        CompletableFuture<Void> allDeletes = CompletableFuture.allOf(deletionFutures.toArray(new CompletableFuture[0]));
+        try {
+            allDeletes.get(replicationProperties.getWriteTimeout().toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException | ExecutionException timeoutOrFailure) {
+            log.warn("Deletion attempt ended before all deletes completed: reason={}", timeoutOrFailure.getClass().getSimpleName());
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+            log.warn("Deletion attempt interrupted while awaiting acknowledgements");
+        }
+
+        Set<Integer> acknowledgedNodeIds = new LinkedHashSet<>();
+        for (CompletableFuture<Integer> future : deletionFutures) {
+            if (future.isDone() && !future.isCompletedExceptionally()) {
+                Integer nodeId = future.getNow(null);
+                if (nodeId != null) {
+                    acknowledgedNodeIds.add(nodeId);
+                }
+            }
+        }
+
+        return acknowledgedNodeIds;
+    }
+
     private Set<Integer> replicateAttempt(ReplicaSelection selection, String fileId, byte[] content, long logicalTimestamp) {
         List<CompletableFuture<Integer>> replicationFutures = new ArrayList<>();
 

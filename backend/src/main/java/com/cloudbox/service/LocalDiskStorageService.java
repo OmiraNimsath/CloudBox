@@ -58,15 +58,19 @@ public class LocalDiskStorageService implements StorageModulePort {
     }
 
     @Override
+    public void deleteReplica(int nodeId, String fileId) throws Exception {
+        Path nodeDir = getNodeDir(nodeId);
+        Path filePath = nodeDir.resolve(fileId);
+        Files.deleteIfExists(filePath);
+    }
+
+    @Override
     public List<FileMetadata> listFiles() throws Exception {
-        // Find distinct files across all nodes (as a simple way to list available files in the cluster)
         List<FileMetadata> allFiles = new ArrayList<>();
         File baseDirFile = new File(BASE_DIR);
         if (!baseDirFile.exists()) return allFiles;
 
-        // Using a set to avoid duplicates based on file name (fileId)
         List<String> distinctFileIds = new ArrayList<>();
-
         for (File nodeDir : baseDirFile.listFiles()) {
             if (nodeDir.isDirectory()) {
                 File[] files = nodeDir.listFiles();

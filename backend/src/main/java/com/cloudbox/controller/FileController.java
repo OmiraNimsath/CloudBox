@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -90,10 +91,25 @@ public class FileController {
             String fileName = fileId.contains("/") ? fileId.substring(fileId.lastIndexOf('/') + 1) : fileId;
             headers.setContentDispositionFormData("attachment", fileName);
 
-            return new ResponseEntity<>(content, headers, HttpStatus.OK);
+return new ResponseEntity<>(content, headers, HttpStatus.OK);
         } catch (Exception e) {
             log.error("Failed to download file: {}", path, e);
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+    }
+
+    @DeleteMapping("/delete")
+    public ResponseEntity<ApiResponse<QuorumWriteResult>> deleteFile(@RequestParam("path") String path) {
+        try {
+            String fileId = path.startsWith("/") ? path.substring(1) : path;
+            log.info("Received request to delete file: {}", fileId);
+
+            QuorumWriteResult result = quorumWriteManager.quorumDelete(fileId);
+            return ResponseEntity.ok(new ApiResponse<>(true, "File deleted successfully", result));
+        } catch (Exception e) {
+            log.error("Failed to delete file", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse<>(false, "Failed to delete file: " + e.getMessage(), null));
         }
     }
 }
