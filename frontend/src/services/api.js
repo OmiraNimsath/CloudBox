@@ -151,3 +151,11 @@ export async function getNodeHealth() {
   const res = await api.get('/health');
   return res.data;
 }
+
+// ── Fault tolerance ──────────────────────────────────────────────
+
+/** Get full fault tolerance status (cluster state, node health, recovery tasks, MTTF/MTTR). */
+export async function getFaultStatus() {
+  const res = await api.get('/fault/status');
+  return res.data.data;
+}
