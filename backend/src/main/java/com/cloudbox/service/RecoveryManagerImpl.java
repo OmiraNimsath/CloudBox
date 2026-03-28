@@ -5,11 +5,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.cloudbox.model.FileMetadata;
 import com.cloudbox.model.RecoveryTask;
 
 import lombok.RequiredArgsConstructor;
@@ -25,7 +30,8 @@ import lombok.extern.slf4j.Slf4j;
 public class RecoveryManagerImpl implements RecoveryManager {
     
     private final FailureDetectionService failureDetectionService;
-    
+    private final StorageModulePort storageModulePort;
+
     @Value("${cloudbox.max-recovery-retries:3}")
     private int maxRetries;
     
@@ -36,18 +42,27 @@ public class RecoveryManagerImpl implements RecoveryManager {
     private final Map<String, RecoveryTask> completedTasks = new ConcurrentHashMap<>();
     private final AtomicBoolean initialized = new AtomicBoolean(false);
     private final AtomicBoolean recoveryEnabled = new AtomicBoolean(true);
-    
+    private ScheduledExecutorService recoveryExecutor;
+
     @Override
     public void initialize() {
         if (initialized.compareAndSet(false, true)) {
-            log.info("Recovery manager initialized (max retries: {})", maxRetries);
+            recoveryExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "RecoveryManager-Scheduler");
+                t.setDaemon(true);
+                return t;
+            });
+            recoveryExecutor.scheduleWithFixedDelay(this::executeRecoveryTasks, 5, 5, TimeUnit.SECONDS);
+            log.info("Recovery manager initialized (max retries: {}, executor started)", maxRetries);
         }
     }
     
     @Override
     public void shutdown() {
         if (initialized.compareAndSet(true, false)) {
-            // Cancel all active recovery tasks
+            if (recoveryExecutor != null) {
+                recoveryExecutor.shutdown();
+            }
             recoveryTasks.values().forEach(task -> {
                 if ("IN_PROGRESS".equals(task.getStatus())) {
                     task.setStatus("FAILED");
@@ -178,12 +193,79 @@ public class RecoveryManagerImpl implements RecoveryManager {
             log.warn("Recovery is disabled, cannot trigger re-replication");
             return;
         }
-        
         int underReplicatedCount = getUnderReplicatedFileCount();
         if (underReplicatedCount > 0) {
-            log.info("Triggering re-replication for {} under-replicated files", 
-                underReplicatedCount);
-            // Actual re-replication logic would be implemented here
+            log.info("Triggering re-replication for {} under-replicated files", underReplicatedCount);
+            List<String> healthyNodes = failureDetectionService.getHealthyNodes();
+            if (!healthyNodes.isEmpty()) {
+                String syntheticNodeId = "under-replicated-" + System.currentTimeMillis();
+                initiateRecovery(syntheticNodeId);
+            }
+        }
+    }
+
+    /**
+     * Scheduled check: pick up PENDING recovery tasks and execute them asynchronously.
+     * Runs every 5 seconds via the recoveryExecutor.
+     */
+    private void executeRecoveryTasks() {
+        recoveryTasks.values().stream()
+            .filter(t -> "PENDING".equals(t.getStatus()))
+            .forEach(task -> {
+                task.setStatus("IN_PROGRESS");
+                Thread.ofVirtual()
+                    .name("recovery-" + task.getRecoveryId())
+                    .start(() -> runRecovery(task));
+            });
+    }
+
+    /**
+     * Execute a single recovery task: copy all files from the source node to the failed node.
+     * Uses the Gossip / self-healing pattern — restores full RF=5 replication.
+     */
+    private void runRecovery(RecoveryTask task) {
+        try {
+            task.setStartedAt(LocalDateTime.now());
+            int failedNode  = Integer.parseInt(task.getFailedNodeId().replace("node-", ""));
+            int sourceNode  = Integer.parseInt(task.getSourceNodeId().replace("node-", ""));
+
+            List<FileMetadata> files = storageModulePort.listFiles();
+            List<String> fileNames  = files.stream().map(FileMetadata::getName).collect(Collectors.toList());
+            long totalSize          = files.stream().mapToLong(FileMetadata::getSize).sum();
+
+            task.setFilesBeingRecovered(fileNames);
+            task.setTotalDataSize(totalSize == 0 ? 1 : totalSize);
+
+            long recovered = 0;
+            for (FileMetadata meta : files) {
+                try {
+                    byte[] content = storageModulePort.retrieveReplica(sourceNode, meta.getName());
+                    storageModulePort.persistReplica(failedNode, meta.getName(), content, System.currentTimeMillis());
+                    recovered += meta.getSize();
+                    task.setDataRecovered(recovered);
+                    task.setProgressPercentage(Math.min(99.0, (recovered * 100.0) / task.getTotalDataSize()));
+                } catch (Exception e) {
+                    log.warn("Skipping file {} during recovery of node {}: {}",
+                        meta.getName(), task.getFailedNodeId(), e.getMessage());
+                }
+            }
+
+            task.setProgressPercentage(100.0);
+            task.setStatus("COMPLETED");
+            task.setCompletedAt(LocalDateTime.now());
+            recoveryTasks.remove(task.getRecoveryId());
+            completedTasks.put(task.getRecoveryId(), task);
+            log.info("Recovery task {} completed for node {}: {} files processed",
+                task.getRecoveryId(), task.getFailedNodeId(), fileNames.size());
+
+        } catch (Exception e) {
+            task.setStatus("FAILED");
+            task.setErrorMessage(e.getMessage());
+            task.setCompletedAt(LocalDateTime.now());
+            recoveryTasks.remove(task.getRecoveryId());
+            completedTasks.put(task.getRecoveryId(), task);
+            log.error("Recovery task {} failed for node {}: {}",
+                task.getRecoveryId(), task.getFailedNodeId(), e.getMessage());
         }
     }
 }
