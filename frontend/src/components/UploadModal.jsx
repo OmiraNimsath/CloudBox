@@ -51,7 +51,7 @@ export default function UploadModal({ currentPath = '/', onClose, onUploaded }) 
     setError('');
     setSuccess('');
     try {
-      const base = destPath.endsWith('/') ? destPath : destPath + '/';
+      const base = '/'; // Forced flat filesystem
       for (const file of files) {
         await uploadFile(file, base);
       }
@@ -111,18 +111,6 @@ export default function UploadModal({ currentPath = '/', onClose, onUploaded }) 
               ))}
             </div>
           )}
-
-          {/* Destination path */}
-          <div className="mt-4">
-            <label className="block text-[13px] font-semibold mb-1.5">Destination folder</label>
-            <input
-              type="text"
-              value={destPath}
-              onChange={(e) => setDestPath(e.target.value)}
-              placeholder="/"
-              className="w-full px-3 py-2 border border-gray-200 rounded-md text-[13px] outline-none focus:border-[#0078d4] transition"
-            />
-          </div>
 
           {/* Feedback */}
           {error && <div className="mt-3 bg-red-50 text-red-700 px-3 py-2 rounded text-[13px]">{error}</div>}
