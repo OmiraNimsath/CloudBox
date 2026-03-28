@@ -33,8 +33,8 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
-    // Determine if it's a network-level error (e.g. connection refused / server terminated)
-    const isNetworkError = !error.response || error.code === 'ECONNABORTED' || error.message === 'Network Error';
+    // Determine if it's a network-level error (e.g. connection refused / server terminated) or a simulated failure (503)
+    const isNetworkError = !error.response || error.code === 'ECONNABORTED' || error.message === 'Network Error' || error.response.status === 503;
     
     if (!isNetworkError || (originalRequest._retryCount || 0) >= KNOWN_PORTS.length) {
       return Promise.reject(error);
