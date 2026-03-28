@@ -7,10 +7,47 @@
 
 import axios from 'axios';
 
+// Known backend node ports in the cluster
+const KNOWN_PORTS = [8080, 8081, 8082, 8083, 8084];
+let currentPortIndex = 0; // Start with the first node
+
+// Helper to get current base URL
+const getBaseUrl = () => `http://localhost:${KNOWN_PORTS[currentPortIndex]}/api`;
+
 const api = axios.create({
-  baseURL: '/api',
-  timeout: 30000,
+  baseURL: getBaseUrl(),
+  timeout: 5000, // shorter timeout to speed up failover
 });
+
+// Request interceptor to dynamically update the baseURL
+api.interceptors.request.use((config) => {
+  if (!config.url.startsWith('http')) {
+    config.baseURL = getBaseUrl();
+  }
+  return config;
+});
+
+// Response interceptor to handle transparent failover if a node goes down
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    
+    // Determine if it's a network-level error (e.g. connection refused / server terminated)
+    const isNetworkError = !error.response || error.code === 'ECONNABORTED' || error.message === 'Network Error';
+    
+    if (!isNetworkError || (originalRequest._retryCount || 0) >= KNOWN_PORTS.length) {
+      return Promise.reject(error);
+    }
+    
+    originalRequest._retryCount = (originalRequest._retryCount || 0) + 1;
+    currentPortIndex = (currentPortIndex + 1) % KNOWN_PORTS.length;
+    console.warn(`[CloudBox] Node unreachable, failing over to next node at port ${KNOWN_PORTS[currentPortIndex]}`);
+    
+    originalRequest.baseURL = getBaseUrl();
+    return api(originalRequest);
+  }
+);
 
 // ── File operations ──────────────────────────────────────────────
 
