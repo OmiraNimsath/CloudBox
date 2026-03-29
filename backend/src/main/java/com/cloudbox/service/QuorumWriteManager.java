@@ -11,7 +11,6 @@ import java.util.concurrent.TimeoutException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 
 import com.cloudbox.config.ReplicationProperties;
@@ -169,7 +168,7 @@ public class QuorumWriteManager {
             return Set.of();
         }
 
-        CompletableFuture<Void> allDeletes = CompletableFuture.allOf(deletionFutures.toArray(new CompletableFuture[0]));
+        CompletableFuture<Void> allDeletes = CompletableFuture.allOf(deletionFutures.toArray(CompletableFuture[]::new));
         try {
             allDeletes.get(replicationProperties.getWriteTimeout().toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException | ExecutionException timeoutOrFailure) {

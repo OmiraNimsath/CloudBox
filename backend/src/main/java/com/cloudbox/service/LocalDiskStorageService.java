@@ -7,7 +7,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
@@ -40,17 +39,16 @@ public class LocalDiskStorageService implements StorageModulePort {
 
     @Override
     public void persistReplica(int nodeId, String fileId, byte[] content, long logicalTimestamp) throws Exception {
-        Path nodeDir = getNodeDir(nodeId);
-        Path filePath = nodeDir.resolve(fileId);
+        Path nodeDir  = getNodeDir(nodeId);
+        Path filePath = nodeDir.resolve(sanitizeFileId(fileId));
         Files.write(filePath, content);
-        // We could also store metadata alongside it (e.g. fileId.meta) to preserve timestamp, but keeping it simple for the implementation.
     }
 
     @Override
     public byte[] retrieveReplica(int nodeId, String fileId) throws Exception {
-        Path nodeDir = getNodeDir(nodeId);
-        Path filePath = nodeDir.resolve(fileId);
-        
+        Path nodeDir  = getNodeDir(nodeId);
+        Path filePath = nodeDir.resolve(sanitizeFileId(fileId));
+
         if (Files.exists(filePath)) {
             return Files.readAllBytes(filePath);
         }
@@ -59,8 +57,8 @@ public class LocalDiskStorageService implements StorageModulePort {
 
     @Override
     public void deleteReplica(int nodeId, String fileId) throws Exception {
-        Path nodeDir = getNodeDir(nodeId);
-        Path filePath = nodeDir.resolve(fileId);
+        Path nodeDir  = getNodeDir(nodeId);
+        Path filePath = nodeDir.resolve(sanitizeFileId(fileId));
         Files.deleteIfExists(filePath);
     }
 
@@ -70,8 +68,11 @@ public class LocalDiskStorageService implements StorageModulePort {
         File baseDirFile = new File(BASE_DIR);
         if (!baseDirFile.exists()) return allFiles;
 
+        File[] nodeDirs = baseDirFile.listFiles();
+        if (nodeDirs == null) return allFiles; // directory empty or I/O error
+
         List<String> distinctFileIds = new ArrayList<>();
-        for (File nodeDir : baseDirFile.listFiles()) {
+        for (File nodeDir : nodeDirs) {
             if (nodeDir.isDirectory()) {
                 File[] files = nodeDir.listFiles();
                 if (files != null) {
@@ -91,5 +92,22 @@ public class LocalDiskStorageService implements StorageModulePort {
             }
         }
         return allFiles;
+    }
+
+    /**
+     * Guard against path-traversal attacks (e.g. fileId = "../../etc/passwd").
+     * Strips any directory component and rejects names that would escape the
+     * node directory after normalisation.
+     */
+    private String sanitizeFileId(String fileId) {
+        if (fileId == null || fileId.isBlank()) {
+            throw new IllegalArgumentException("fileId must not be blank");
+        }
+        // Keep only the last path segment — discard any directory prefix
+        String name = Paths.get(fileId).getFileName().toString();
+        if (name.contains("..") || name.contains("/") || name.contains("\\")) {
+            throw new IllegalArgumentException("Invalid fileId: " + fileId);
+        }
+        return name;
     }
 }
