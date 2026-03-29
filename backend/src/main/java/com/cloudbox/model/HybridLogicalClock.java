@@ -44,10 +44,11 @@ public class HybridLogicalClock implements Comparable<HybridLogicalClock> {
 
     /**
      * Update HLC upon sending/processing an event.
-     * Current time >= last physical time ensures monotonicity.
+     * Accepts the caller's adjusted physical time so that the Cristian offset
+     * is reflected in every event timestamp rather than raw system time.
      */
-    public void updateSend(int thisNodeId) {
-        long now = System.currentTimeMillis();
+    public void updateSend(int thisNodeId, long adjustedNow) {
+        long now = adjustedNow;
         if (now > this.physicalTime) {
             this.physicalTime = now;
             this.logicalCounter = 0;
@@ -59,10 +60,11 @@ public class HybridLogicalClock implements Comparable<HybridLogicalClock> {
 
     /**
      * Update HLC upon receiving a remote HLC.
-     * Merges remote clock with local time, ensuring causality.
+     * Accepts the caller's adjusted physical time so that the Cristian offset
+     * is reflected in every event timestamp rather than raw system time.
      */
-    public void updateReceive(HybridLogicalClock remote, int thisNodeId) {
-        long now = System.currentTimeMillis();
+    public void updateReceive(HybridLogicalClock remote, int thisNodeId, long adjustedNow) {
+        long now = adjustedNow;
 
         if (now > Math.max(this.physicalTime, remote.physicalTime)) {
             // New physical time is ahead of both

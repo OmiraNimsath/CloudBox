@@ -67,8 +67,9 @@ public class ClockSynchronizer {
     public HybridLogicalClock getCurrentHLC() {
         clockLock.writeLock().lock();
         try {
-            // Advance physical time on every read so UI always shows current wall-clock time
-            hybridLogicalClock.updateSend(nodeId);
+            // Advance physical time on every read so UI always shows current wall-clock time.
+            // Use adjusted time so that the Cristian offset flows into all HLC timestamps.
+            hybridLogicalClock.updateSend(nodeId, getAdjustedPhysicalTime());
             return hybridLogicalClock.copy();
         } finally {
             clockLock.writeLock().unlock();
@@ -98,7 +99,7 @@ public class ClockSynchronizer {
     public void updateOnSend() {
         clockLock.writeLock().lock();
         try {
-            hybridLogicalClock.updateSend(nodeId);
+            hybridLogicalClock.updateSend(nodeId, getAdjustedPhysicalTime());
             logicalTimestamp.increment();
         } finally {
             clockLock.writeLock().unlock();
@@ -111,7 +112,7 @@ public class ClockSynchronizer {
     public void updateOnReceive(HybridLogicalClock remoteHLC, LogicalTimestamp remoteLogical) {
         clockLock.writeLock().lock();
         try {
-            hybridLogicalClock.updateReceive(remoteHLC, nodeId);
+            hybridLogicalClock.updateReceive(remoteHLC, nodeId, getAdjustedPhysicalTime());
             if (remoteLogical != null) {
                 logicalTimestamp.update(remoteLogical);
             } else {
