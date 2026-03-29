@@ -12,6 +12,7 @@ import Sidebar from './components/Sidebar.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import ClusterView from './pages/ClusterView.jsx';
 import FaultTolerancePage from './pages/FaultTolerancePage.jsx';
+import ReplicationPage from './pages/ReplicationPage.jsx';
 import { getClusterStatus } from './services/api.js';
 
 export default function App() {
@@ -55,6 +56,7 @@ export default function App() {
               />
               <Route path="/cluster" element={<ClusterView />} />
               <Route path="/fault-tolerance" element={<FaultTolerancePage />} />
+              <Route path="/replication" element={<ReplicationPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
