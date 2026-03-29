@@ -1,5 +1,6 @@
 package com.cloudbox.service;
 
+import com.cloudbox.config.ClusterConfig;
 import com.cloudbox.config.TimeSyncProperties;
 import com.cloudbox.model.ClockSkewInfo;
 import lombok.extern.slf4j.Slf4j;
@@ -219,8 +220,7 @@ public class SkewDetector {
             return;
         }
         try {
-            String remoteUrl = String.format("http://localhost:%d/api/timesync/time",
-                    8080 + remoteNodeId - 1);
+            String remoteUrl = ClusterConfig.getNodeUrl(remoteNodeId) + "/api/timesync/time";
 
             long t0 = System.currentTimeMillis();
             Long remoteTime = restTemplate.getForObject(remoteUrl, Long.class);

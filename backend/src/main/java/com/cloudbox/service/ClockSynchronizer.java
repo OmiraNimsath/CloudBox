@@ -1,5 +1,6 @@
 package com.cloudbox.service;
 
+import com.cloudbox.config.ClusterConfig;
 import com.cloudbox.config.TimeSyncProperties;
 import com.cloudbox.model.HybridLogicalClock;
 import com.cloudbox.model.LogicalTimestamp;
@@ -218,8 +219,7 @@ public class ClockSynchronizer {
                 continue;
             }
             try {
-                String url = String.format("http://localhost:%d/api/timesync/time",
-                        8080 + remoteId - 1);
+                String url = ClusterConfig.getNodeUrl(remoteId) + "/api/timesync/time";
 
                 long t0 = System.currentTimeMillis();
                 Long serverTime = restTemplate.getForObject(url, Long.class);
