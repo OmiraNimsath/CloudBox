@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -22,7 +23,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class ClockSynchronizer {
 
     private final TimeSyncProperties timeSyncProperties;
+    private final RestTemplate restTemplate;
     private final int nodeId;
+    private final int totalNodes;
 
     // Thread-safe clock state
     private final ReentrantReadWriteLock clockLock = new ReentrantReadWriteLock();
@@ -33,9 +36,13 @@ public class ClockSynchronizer {
 
     public ClockSynchronizer(
             TimeSyncProperties timeSyncProperties,
-            @Value("${cloudbox.node-id:1}") int nodeId) {
+            RestTemplate restTemplate,
+            @Value("${cloudbox.node-id:1}") int nodeId,
+            @Value("${cloudbox.cluster-size:5}") int totalNodes) {
         this.timeSyncProperties = timeSyncProperties;
+        this.restTemplate = restTemplate;
         this.nodeId = nodeId;
+        this.totalNodes = totalNodes;
 
         // Initialize clocks
         this.hybridLogicalClock = HybridLogicalClock.now(nodeId);
@@ -179,28 +186,48 @@ public class ClockSynchronizer {
     }
 
     /**
-     * Synchronize with NTP server (simulated).
-     * In production, this would use Apache Commons Net or similar.
+     * Synchronize with a reference node using Cristian's Algorithm.
+     *
+     * Cristian's Algorithm:
+     *   1. Record T0 (local time before request)
+     *   2. Request current time from reference node
+     *   3. Record T1 (local time after response)
+     *   4. RTT = T1 - T0
+     *   5. Estimated server time at receipt = serverTime + RTT / 2
+     *   6. Offset = estimatedServerTime - T1
      */
     private void synchronizeWithNTP() {
-        try {
-            // Simulate NTP synchronization
-            // In production: use NTPUDPClient from commons-net
-            long localTime = System.currentTimeMillis();
+        for (int remoteId = 1; remoteId <= totalNodes; remoteId++) {
+            if (remoteId == nodeId) {
+                continue;
+            }
+            try {
+                String url = String.format("http://localhost:%d/api/timesync/time",
+                        8080 + remoteId - 1);
 
-            // For now, simulate small random NTP offset (in real implementation,
-            // this would query actual NTP server)
-            long ntpTime = System.currentTimeMillis();
-            long offset = (long) (Math.random() * 20 - 10); // Random ±10ms
+                long t0 = System.currentTimeMillis();
+                Long serverTime = restTemplate.getForObject(url, Long.class);
+                long t1 = System.currentTimeMillis();
 
-            adjustTimeOffset(offset);
+                if (serverTime == null) {
+                    continue;
+                }
 
-            log.debug("NTP sync: localTime={}, ntpTime={}, offset={}ms",
-                    localTime, ntpTime, offset);
-        } catch (Exception e) {
-            log.warn("NTP synchronization failed, falling back to system time", e);
-            synchronizeWithSystemTime();
+                long rtt = t1 - t0;
+                long estimatedServerNow = serverTime + rtt / 2;
+                long offset = t1 - estimatedServerNow;
+
+                adjustTimeOffset(offset);
+
+                log.debug("Cristian sync with node {}: T0={}, serverTime={}, T1={}, RTT={}ms, offset={}ms",
+                        remoteId, t0, serverTime, t1, rtt, offset);
+                return; // Success — one reference node is sufficient
+            } catch (Exception e) {
+                log.debug("Cristian sync failed for node {}: {}", remoteId, e.getMessage());
+            }
         }
+        log.warn("All reference nodes unreachable, falling back to system time");
+        synchronizeWithSystemTime();
     }
 
     /**

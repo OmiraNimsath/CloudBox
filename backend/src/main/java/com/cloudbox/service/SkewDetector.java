@@ -94,6 +94,10 @@ public class SkewDetector {
                     .max()
                     .orElse(0);
 
+            // Recompute global alert from all nodes (fixes alertActive never resetting)
+            alertActive = skewMap.values().stream()
+                    .anyMatch(ClockSkewInfo::isAlertTriggered);
+
         } finally {
             skewLock.writeLock().unlock();
         }
