@@ -77,7 +77,8 @@ export default function TimeSyncPage() {
           </span>
         </Card>
         <Card label="Max Clock Skew">
-          <span className="text-lg font-mono">{status.maxClockSkew ?? 0} ms</span>
+          <span className="text-lg font-mono">{status.currentMaxClockSkew ?? 0} ms</span>
+          <div className="text-xs text-gray-400 mt-1">Peak: {status.maxClockSkew ?? 0} ms</div>
         </Card>
         <Card label="Synced Nodes">
           <span className="text-lg font-mono">{status.syncedNodeCount ?? 0} / {status.totalNodes ?? report.totalNodes ?? 5}</span>

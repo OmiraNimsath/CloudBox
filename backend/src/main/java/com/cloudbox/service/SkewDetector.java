@@ -348,10 +348,16 @@ public class SkewDetector {
             int inSyncCount = getInSyncNodeCount(); // already includes self
             long threshold = timeSyncProperties.getClock_skew_threshold_ms();
 
+            long liveMax = skewMap.values().stream()
+                    .mapToLong(info -> Math.abs(info.getSkewMillis()))
+                    .max()
+                    .orElse(0);
+
             return SkewReport.builder()
                     .nodeId(nodeId)
                     .timestamp(System.currentTimeMillis())
                     .maxClockSkew(maxClockSkew)
+                    .currentMaxClockSkew(liveMax)
                     .threshold(threshold)
                     .alertActive(alertActive)
                     .inSyncNodeCount(inSyncCount)
@@ -372,7 +378,8 @@ public class SkewDetector {
     public static class SkewReport {
         private int nodeId;
         private long timestamp;
-        private long maxClockSkew;
+        private long maxClockSkew;        // historical peak — never decreases until reset
+        private long currentMaxClockSkew; // live max computed from current skew readings
         private long threshold;
         private boolean alertActive;
         private int inSyncNodeCount;
