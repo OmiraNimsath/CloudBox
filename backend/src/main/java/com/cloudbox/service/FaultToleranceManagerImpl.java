@@ -41,8 +41,13 @@ public class FaultToleranceManagerImpl implements FaultToleranceManager {
     private final AtomicLong quorumLossCount = new AtomicLong(0);
     /** Time (ms) when each node was first detected as failed this episode. */
     private final Map<String, Long> failureStartMs = new ConcurrentHashMap<>();
-    /** Collected real MTTR samples (seconds) from completed recover cycles. */
+    /** Collected real MTTR samples (seconds) from completed quorum-loss outages. */
     private final java.util.List<Double> mttrSamples = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    // ── Time-weighted average replication ──────────────────────────────
+    private volatile long   replicationLastUpdateMs  = 0;
+    private volatile double replicationWeightedSum   = 0.0;
+    private volatile double replicationTotalTimeMs   = 0.0;
 
     @Override
     public void initialize() {
@@ -81,12 +86,15 @@ public class FaultToleranceManagerImpl implements FaultToleranceManager {
         // Track quorum-loss transitions for MTTF
         trackQuorumLoss(failureDetectionService.hasQuorum());
 
+        // Update time-weighted replication average before building the snapshot
+        updateReplicationAverage(nodeHealthMap);
+
         // Compute reliability metrics once (avoids repeated side-effectful calls)
         List<RecoveryTask> completedTasks = recoveryManager.getCompletedRecoveryTasks();
         List<RecoveryTask> activeTasks    = recoveryManager.getActiveRecoveryTasks();
         double mttf  = calculateMttf();
         double mttr  = calculateMttr();
-        double avail = calculateAvailability(mttf, mttr);
+        double avail = quorumLossCount.get() == 0 ? 100.0 : calculateAvailability(mttf, mttr);
 
         // Aggregate data
         FaultStatus status = FaultStatus.builder()
@@ -188,30 +196,50 @@ public class FaultToleranceManagerImpl implements FaultToleranceManager {
             quorumLossCount.incrementAndGet();
             log.warn("Quorum lost — outage episode #{} started", quorumLossCount.get());
         } else if (hasQuorum && quorumLossStartMs >= 0) {
-            // Quorum restored — outage over
+            // Quorum restored — finalise the outage duration as a real MTTR sample
+            double durationSec = (System.currentTimeMillis() - quorumLossStartMs) / 1000.0;
+            mttrSamples.add(durationSec);
+            log.info("Quorum restored — MTTR sample finalised: {}s (total samples: {})",
+                String.format("%.1f", durationSec), mttrSamples.size());
             quorumLossStartMs = -1;
         }
     }
 
     @Override
     public void recordRecovery(String nodeId) {
-        Long startMs = failureStartMs.remove(nodeId);
-        if (startMs != null) {
-            double durationSec = (System.currentTimeMillis() - startMs) / 1000.0;
-            mttrSamples.add(durationSec);
-            log.info("MTTR sample recorded for {}: {}s (total samples: {})",
-                nodeId, String.format("%.1f", durationSec), mttrSamples.size());
-        }
+        // Clean up per-node failure tracking; MTTR sampling is handled quorum-wide
+        // in trackQuorumLoss() so we don't double-count here.
+        failureStartMs.remove(nodeId);
+        log.info("Node {} marked recovered (MTTR tracked at quorum level)", nodeId);
     }
 
     /**
-     * Avg replication factor = number of nodes that are currently alive.
-     * Each file is replicated to every alive node, so this equals the real
-     * per-file replica count under normal operation.
+     * Update the time-weighted replication sum.
+     * Called once per getFaultStatus() poll before the snapshot is built.
+     */
+    private void updateReplicationAverage(Map<String, NodeHealth> nodeHealthMap) {
+        long now = System.currentTimeMillis();
+        if (replicationLastUpdateMs > 0) {
+            long delta = now - replicationLastUpdateMs;
+            if (delta > 0) {
+                double aliveCount = nodeHealthMap.values().stream()
+                    .filter(NodeHealth::isAlive).count();
+                replicationWeightedSum  += aliveCount * delta;
+                replicationTotalTimeMs  += delta;
+            }
+        }
+        replicationLastUpdateMs = now;
+    }
+
+    /**
+     * Avg replication factor — time-weighted over the application's lifetime.
+     * Falls back to the current snapshot on the very first poll.
      */
     private double calculateAverageReplicationFactor(Map<String, NodeHealth> nodeHealthMap) {
-        if (nodeHealthMap.isEmpty()) return 0.0;
-        return nodeHealthMap.values().stream().filter(NodeHealth::isAlive).count();
+        if (replicationTotalTimeMs <= 0) {
+            return nodeHealthMap.values().stream().filter(NodeHealth::isAlive).count();
+        }
+        return replicationWeightedSum / replicationTotalTimeMs;
     }
     
     /**
@@ -246,22 +274,32 @@ public class FaultToleranceManagerImpl implements FaultToleranceManager {
      * Returns current uptime when no outage has occurred yet.
      */
     private double calculateMttf() {
-        long uptimeSeconds = systemStartMs > 0
-            ? (System.currentTimeMillis() - systemStartMs) / 1000
-            : 0;
+        if (systemStartMs <= 0) return -1.0;
+        // During an active outage, freeze MTTF at the moment quorum was lost.
+        // This prevents MTTF from climbing while the system is down.
+        long endMs = quorumLossStartMs >= 0 ? quorumLossStartMs : System.currentTimeMillis();
+        long uptimeSeconds = (endMs - systemStartMs) / 1000;
         long outages = quorumLossCount.get();
         if (outages == 0) return uptimeSeconds > 0 ? uptimeSeconds : -1.0;
         return (double) uptimeSeconds / outages;
     }
 
     /**
-     * MTTR = average of recorded quorum-outage durations.
-     * A sample is added when simulate-recovery restores quorum.
-     * Returns -1 when no outage has been recovered yet (shown as "—" in UI).
+     * MTTR = average of all quorum-outage durations (completed + current live).
+     * While an outage is in progress the current elapsed time is folded in as a
+     * provisional sample so the displayed value grows in real time.
+     * Returns -1 only when no outage has ever occurred (shown as "—" in UI).
      */
     private double calculateMttr() {
-        if (mttrSamples.isEmpty()) return -1.0;
-        return mttrSamples.stream().mapToDouble(Double::doubleValue).average().orElse(-1.0);
+        double liveOutageSec = quorumLossStartMs >= 0
+            ? (System.currentTimeMillis() - quorumLossStartMs) / 1000.0
+            : -1.0;
+
+        if (mttrSamples.isEmpty() && liveOutageSec < 0) return -1.0;
+
+        java.util.List<Double> effective = new java.util.ArrayList<>(mttrSamples);
+        if (liveOutageSec >= 0) effective.add(liveOutageSec);
+        return effective.stream().mapToDouble(Double::doubleValue).average().orElse(-1.0);
     }
 
     /**
