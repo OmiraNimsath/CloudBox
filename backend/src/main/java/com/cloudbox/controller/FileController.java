@@ -1,5 +1,6 @@
 package com.cloudbox.controller;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -19,6 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.cloudbox.model.ApiResponse;
 import com.cloudbox.model.FileMetadata;
+import com.cloudbox.config.ReplicationProperties;
 import com.cloudbox.service.QuorumWriteManager;
 import com.cloudbox.service.QuorumWriteResult;
 import com.cloudbox.service.StorageModulePort;
@@ -33,11 +35,13 @@ public class FileController {
     private final QuorumWriteManager quorumWriteManager;
     private final StorageModulePort storageModulePort;
     private final ConsensusModulePort consensusModulePort;
+    private final ReplicationProperties replicationProperties;
 
-    public FileController(QuorumWriteManager quorumWriteManager, StorageModulePort storageModulePort, ConsensusModulePort consensusModulePort) {
+    public FileController(QuorumWriteManager quorumWriteManager, StorageModulePort storageModulePort, ConsensusModulePort consensusModulePort, ReplicationProperties replicationProperties) {
         this.quorumWriteManager = quorumWriteManager;
         this.storageModulePort = storageModulePort;
         this.consensusModulePort = consensusModulePort;
+        this.replicationProperties = replicationProperties;
     }
 
     @PostMapping("/upload")
@@ -110,6 +114,58 @@ return new ResponseEntity<>(content, headers, HttpStatus.OK);
             log.error("Failed to delete file", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ApiResponse<>(false, "Failed to delete file: " + e.getMessage(), null));
+        }
+    }
+
+    @GetMapping("/replication-status")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getReplicationStatus() {
+        try {
+            List<FileMetadata> files = storageModulePort.listFiles();
+            int rf = replicationProperties.getReplicationFactor();
+            int quorum = replicationProperties.getQuorumSize();
+
+            // Per-file replica counts: probe each node
+            List<java.util.Map<String, Object>> fileStatuses = new ArrayList<>();
+            for (FileMetadata meta : files) {
+                int replicaCount = 0;
+                List<Integer> presentOn = new ArrayList<>();
+                for (int nodeId = 1; nodeId <= rf; nodeId++) {
+                    try {
+                        byte[] data = storageModulePort.retrieveReplica(nodeId, meta.getName());
+                        if (data != null && data.length > 0) {
+                            replicaCount++;
+                            presentOn.add(nodeId);
+                        }
+                    } catch (Exception ignored) { }
+                }
+                fileStatuses.add(java.util.Map.of(
+                    "fileName", meta.getName(),
+                    "size", meta.getSize(),
+                    "replicaCount", replicaCount,
+                    "expectedReplicas", rf,
+                    "presentOnNodes", presentOn,
+                    "fullyReplicated", replicaCount >= rf
+                ));
+            }
+
+            long fullyReplicated = fileStatuses.stream()
+                .filter(f -> Boolean.TRUE.equals(f.get("fullyReplicated")))
+                .count();
+
+            java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+            result.put("replicationFactor", rf);
+            result.put("quorumSize", quorum);
+            result.put("totalFiles", files.size());
+            result.put("fullyReplicatedFiles", fullyReplicated);
+            result.put("underReplicatedFiles", files.size() - fullyReplicated);
+            result.put("consistencyModel", "QUORUM_WRITE_LEADER_READ");
+            result.put("files", fileStatuses);
+
+            return ResponseEntity.ok(new ApiResponse<>(true, "Replication status retrieved", result));
+        } catch (Exception e) {
+            log.error("Failed to get replication status", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse<>(false, "Failed: " + e.getMessage(), null));
         }
     }
 }

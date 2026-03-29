@@ -159,3 +159,11 @@ export async function getFaultStatus() {
   const res = await api.get('/fault/status');
   return res.data.data;
 }
+
+// ── Replication ────────────────────────────────────────────────
+
+/** Get replication status for all files (RF, quorum, per-file replica counts). */
+export async function getReplicationStatus() {
+  const res = await api.get('/files/replication-status');
+  return res.data.data;
+}
