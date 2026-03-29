@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   FiServer, FiRefreshCw, FiAlertTriangle,
-  FiCheckCircle, FiClock,
+  FiCheckCircle, FiClock, FiShield,
 } from 'react-icons/fi';
 import {
   getClusterStatus, getConsensusStatus, getTimeSyncStatus,
@@ -154,11 +154,49 @@ export default function ClusterView() {
       {consensus && (
         <section className="mb-6">
           <h3 className="flex items-center gap-1.5 text-base font-semibold mb-2">
-            <FiCheckCircle className="text-[#0078d4]" /> Consensus
+            <FiCheckCircle className="text-[#0078d4]" /> Consensus (ZAB Protocol)
           </h3>
           <div className="bg-white border border-gray-200 rounded-lg p-4 text-[13px] space-y-1">
             <div className="flex justify-between"><span className="text-gray-500">Leader</span><span>Node {consensus.leader ?? '—'}</span></div>
-            <div className="flex justify-between"><span className="text-gray-500">Term / Epoch</span><span>{consensus.term ?? consensus.epoch ?? '—'}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Epoch</span><span>{consensus.epoch ?? '—'}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">ZXID</span><span>{consensus.zxid ?? '—'}</span></div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Leader status</span>
+              <span className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full inline-block ${consensus.alive ? 'bg-green-500' : 'bg-red-500'}`} />
+                {consensus.alive ? 'Alive' : 'Unreachable'}
+              </span>
+            </div>
+            {consensus.lastHeartbeat > 0 && (
+              <div className="flex justify-between"><span className="text-gray-500">Leader heartbeat</span><span>{new Date(consensus.lastHeartbeat).toLocaleTimeString()}</span></div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Partition status */}
+      {cluster?.partitionStatus && (
+        <section className="mb-6">
+          <h3 className="flex items-center gap-1.5 text-base font-semibold mb-2">
+            <FiShield className={cluster.partitionStatus.partitioned ? 'text-red-500' : 'text-green-600'} /> Partition Status
+          </h3>
+          <div className="bg-white border border-gray-200 rounded-lg p-4 text-[13px] space-y-1">
+            <div className="flex justify-between">
+              <span className="text-gray-500">Network</span>
+              <span className={`font-semibold ${cluster.partitionStatus.partitioned ? 'text-red-600' : 'text-green-600'}`}>
+                {cluster.partitionStatus.partitioned ? 'Partitioned' : 'Connected'}
+              </span>
+            </div>
+            <div className="flex justify-between"><span className="text-gray-500">Reachable nodes</span><span>{cluster.partitionStatus.reachableNodes ?? '—'} / 5</span></div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Quorum write</span>
+              <span className={`font-semibold ${cluster.partitionStatus.canWrite ? 'text-green-600' : 'text-red-600'}`}>
+                {cluster.partitionStatus.canWrite ? 'Available' : 'Blocked'}
+              </span>
+            </div>
+            {cluster.partitionStatus.partitionDescription && (
+              <div className="flex justify-between"><span className="text-gray-500">Description</span><span>{cluster.partitionStatus.partitionDescription}</span></div>
+            )}
           </div>
         </section>
       )}
