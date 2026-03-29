@@ -1,6 +1,10 @@
 package com.cloudbox.service;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.curator.framework.CuratorFramework;
@@ -42,6 +46,9 @@ public class ConsensusManager {
 
     @Value("${cloudbox.node-id:1}")
     private int nodeId;
+
+    @Value("${cloudbox.cluster-size:5}")
+    private int clusterSize;
 
     private AtomicLong zxidCounter = new AtomicLong(0);
     private long currentEpoch = 0;
@@ -102,23 +109,62 @@ public class ConsensusManager {
     }
 
     /**
-     * Broadcast a proposal using ZooKeeper's atomic broadcast.
+     * Broadcast a proposal using ZooKeeper's atomic broadcast,
+     * then collect ACKs from followers until a quorum is reached.
      *
-     * Creates an ephemeral sequential node representing the proposal.
-     * All followers watch this path and receive the proposal atomically.
+     * ZAB two-phase commit:
+     *   Phase 1 — Leader writes proposal to ZK (ordered log)
+     *   Phase 2 — Leader sends proposal to followers, collects ACKs
+     *   Commit  — Once quorum ACKs received, mark COMMITTED
      */
     private void broadcastProposal(ConsensusProposal proposal) throws Exception {
         try {
+            // Phase 1: write to ZK ordered log
             String proposalPath = ClusterConfig.ZK_NAMESPACE + "/proposals/" + proposal.getProposalId();
             String proposalData = serializeProposal(proposal);
 
-            // Create with EPHEMERAL_SEQUENTIAL to ensure ordering
             curatorFramework.create()
                     .creatingParentsIfNeeded()
                     .withMode(CreateMode.PERSISTENT_SEQUENTIAL)
                     .forPath(proposalPath, proposalData.getBytes());
 
-            log.debug("Broadcasted proposal {} to all nodes", proposal.getProposalId());
+            // Phase 2: collect ACKs from followers
+            int quorum = ClusterConfig.QUORUM_SIZE;
+            AtomicInteger acks = new AtomicInteger(1); // leader counts as 1 ACK
+
+            List<CompletableFuture<Void>> futures = new ArrayList<>();
+            for (int id = 1; id <= clusterSize; id++) {
+                if (id == nodeId) continue; // skip self
+                final int followerId = id;
+                futures.add(CompletableFuture.runAsync(() -> {
+                    try {
+                        String url = ClusterConfig.getNodeUrl(followerId)
+                                + "/api/cluster/consensus/ack?proposalId=" + proposal.getProposalId();
+                        restTemplate.postForEntity(url, null, Void.class);
+                        acks.incrementAndGet();
+                        log.debug("ACK received from node {} for proposal {}", followerId, proposal.getProposalId());
+                    } catch (Exception e) {
+                        log.debug("No ACK from node {} for proposal {}: {}",
+                                followerId, proposal.getProposalId(), e.getMessage());
+                    }
+                }));
+            }
+
+            // Wait for all attempts to finish
+            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
+
+            int totalAcks = acks.get();
+            proposal.setAckCount(totalAcks);
+
+            if (totalAcks >= quorum) {
+                proposal.setStatus("COMMITTED");
+                log.info("Proposal {} COMMITTED with {}/{} ACKs (quorum={})",
+                        proposal.getProposalId(), totalAcks, clusterSize, quorum);
+            } else {
+                proposal.setStatus("ABORTED");
+                log.warn("Proposal {} ABORTED: only {}/{} ACKs (quorum={})",
+                        proposal.getProposalId(), totalAcks, clusterSize, quorum);
+            }
         } catch (Exception e) {
             log.error("Failed to broadcast proposal", e);
             throw e;

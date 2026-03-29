@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
@@ -155,6 +156,18 @@ public class ConsensusController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.error("Failed to create proposal: " + e.getMessage()));
         }
+    }
+
+    /**
+     * POST /api/cluster/consensus/ack
+     * Acknowledge a proposal (follower confirms receipt).
+     * Used by the leader during ZAB Phase 2 to collect quorum ACKs.
+     */
+    @PostMapping("/ack")
+    public ResponseEntity<ApiResponse<String>> acknowledgeProposal(
+            @RequestParam String proposalId) {
+        log.debug("ACK received for proposal {} on node {}", proposalId, clusterCoordinator.getNodeId());
+        return ResponseEntity.ok(ApiResponse.ok("ACK", proposalId));
     }
 
     /**

@@ -26,4 +26,12 @@ public class ConsensusProposal {
     private String data;
     private int proposerId;
     private long timestamp;
+
+    /** PROPOSED → COMMITTED once quorum ACKs received, or ABORTED on failure. */
+    @Builder.Default
+    private String status = "PROPOSED";
+
+    /** Number of follower ACKs collected so far (leader counts as 1). */
+    @Builder.Default
+    private int ackCount = 1;
 }
