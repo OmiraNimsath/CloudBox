@@ -99,7 +99,7 @@ public class AntiEntropyService {
         try {
             // Step 1: Get current leader
             int leaderId = consensusModulePort.getCurrentLeaderNodeId();
-            if (leaderId == 0) {
+            if (leaderId < 1) {
                 log.warn("[Anti-Entropy] Node {} has no leader, skipping reconciliation", currentNodeId);
                 return;
             }

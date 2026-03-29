@@ -26,7 +26,7 @@ public class ConsensusModuleAdapter implements ConsensusModulePort {
         if (clusterCoordinator.getLeaderInfo() != null) {
             return clusterCoordinator.getLeaderInfo().getLeaderId();
         }
-        return 1; // Fallback default
+        return -1; // No leader elected yet
     }
 
     @Override
