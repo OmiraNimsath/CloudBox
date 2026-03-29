@@ -124,7 +124,7 @@ export default function FaultTolerancePage() {
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Availability</p>
             <p className="text-2xl font-bold text-blue-600">
-              {status.availabilityPercentage?.toFixed(3)}%
+              {status.availabilityPercentage < 0 ? '—' : `${status.availabilityPercentage?.toFixed(1)}%`}
             </p>
             <p className="text-xs text-gray-400 mt-0.5">{status.availabilityLabel}</p>
           </div>
@@ -190,35 +190,7 @@ export default function FaultTolerancePage() {
         </table>
       </div>
 
-      {/* ── Active recovery tasks ──────────────────────────────── */}
-      {status.activeRecoveryTasks?.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-5">
-          <h2 className="text-base font-semibold text-gray-700 mb-4">
-            Active Recovery Tasks ({status.activeRecoveryTasks.length})
-          </h2>
-          <div className="space-y-4">
-            {status.activeRecoveryTasks.map((t) => (
-              <div key={t.recoveryId} className="p-3 rounded-lg border border-gray-200">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-medium text-gray-800">{t.failedNodeId}</span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">
-                    {t.status}
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${t.progressPercentage ?? 0}%` }}
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {(t.progressPercentage ?? 0).toFixed(1)}% — source: {t.sourceNodeId}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Active Recovery Tasks hidden — recovery is tracked via simulate-recovery timing */}
 
       {/* ── Recent failures ────────────────────────────────────── */}
       {status.recentFailures?.length > 0 && (

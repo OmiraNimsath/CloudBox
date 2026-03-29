@@ -1,10 +1,10 @@
 package com.cloudbox.service;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -35,8 +35,14 @@ public class FaultToleranceManagerImpl implements FaultToleranceManager {
     private final AtomicBoolean enabled = new AtomicBoolean(true);
     /** Wall-clock millis when the fault-tolerance system was initialized. */
     private volatile long systemStartMs = 0;
-    /** Running count of node failures detected since startup. */
-    private final AtomicLong totalFailureCount = new AtomicLong(0);
+    /** Time (ms) when quorum was first lost in the current outage episode; -1 when quorum is held. */
+    private volatile long quorumLossStartMs = -1;
+    /** Cumulative count of quorum-loss outage events. */
+    private final AtomicLong quorumLossCount = new AtomicLong(0);
+    /** Time (ms) when each node was first detected as failed this episode. */
+    private final Map<String, Long> failureStartMs = new ConcurrentHashMap<>();
+    /** Collected real MTTR samples (seconds) from completed recover cycles. */
+    private final java.util.List<Double> mttrSamples = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     @Override
     public void initialize() {
@@ -70,6 +76,18 @@ public class FaultToleranceManagerImpl implements FaultToleranceManager {
         // Determine cluster state
         String clusterState = determineClusterState(healthyCount, failedCount, totalNodes);
         
+        // Track failure start times for MTTR calculation
+        trackFailureTimes(nodeHealthMap);
+        // Track quorum-loss transitions for MTTF
+        trackQuorumLoss(failureDetectionService.hasQuorum());
+
+        // Compute reliability metrics once (avoids repeated side-effectful calls)
+        List<RecoveryTask> completedTasks = recoveryManager.getCompletedRecoveryTasks();
+        List<RecoveryTask> activeTasks    = recoveryManager.getActiveRecoveryTasks();
+        double mttf  = calculateMttf();
+        double mttr  = calculateMttr();
+        double avail = calculateAvailability(mttf, mttr);
+
         // Aggregate data
         FaultStatus status = FaultStatus.builder()
             .timestamp(LocalDateTime.now())
@@ -79,18 +97,18 @@ public class FaultToleranceManagerImpl implements FaultToleranceManager {
             .failedNodes(failedCount)
             .recoveringNodes(getRecoveringNodeCount(nodeHealthMap))
             .nodeHealthMap(nodeHealthMap)
-            .activeRecoveryTasks(recoveryManager.getActiveRecoveryTasks())
-            .completedRecoveryTasks(recoveryManager.getCompletedRecoveryTasks())
+            .activeRecoveryTasks(activeTasks)
+            .completedRecoveryTasks(completedTasks)
             .underReplicatedFileCount(recoveryManager.getUnderReplicatedFileCount())
             .averageReplicationFactor(calculateAverageReplicationFactor(nodeHealthMap))
             .hasQuorum(failureDetectionService.hasQuorum())
             .lastHeartbeatTime(getLastHeartbeatTime())
             .failureDetectionStatus(getFailureDetectionStatus())
             .recentFailures(extractRecentFailures(nodeHealthMap))
-            .mttfSeconds(calculateMttf(failedCount))
-            .mttrSeconds(calculateMttr(recoveryManager.getCompletedRecoveryTasks()))
-            .availabilityPercentage(calculateAvailability(calculateMttf(failedCount), calculateMttr(recoveryManager.getCompletedRecoveryTasks())))
-            .availabilityLabel(availabilityLabel(calculateAvailability(calculateMttf(failedCount), calculateMttr(recoveryManager.getCompletedRecoveryTasks()))))
+            .mttfSeconds(mttf)
+            .mttrSeconds(mttr)
+            .availabilityPercentage(avail)
+            .availabilityLabel(availabilityLabel(avail))
             .build();
 
         return status;
@@ -145,15 +163,55 @@ public class FaultToleranceManagerImpl implements FaultToleranceManager {
     }
     
     /**
-     * Calculate average replication factor across all nodes.
+     * Record failure start times for newly-failed nodes; clear them when nodes recover.
+     * Called every time getFaultStatus() is polled.
+     */
+    private void trackFailureTimes(Map<String, NodeHealth> nodeHealthMap) {
+        long now = System.currentTimeMillis();
+        for (NodeHealth nh : nodeHealthMap.values()) {
+            if (!nh.isAlive()) {
+                failureStartMs.putIfAbsent(nh.getNodeId(), now);
+            } else {
+                failureStartMs.remove(nh.getNodeId());
+            }
+        }
+    }
+
+    /**
+     * Track quorum-loss events for MTTF.
+     * A new outage event is recorded each time quorum transitions from held → lost.
+     */
+    private void trackQuorumLoss(boolean hasQuorum) {
+        if (!hasQuorum && quorumLossStartMs < 0) {
+            // Quorum just lost — start a new outage episode
+            quorumLossStartMs = System.currentTimeMillis();
+            quorumLossCount.incrementAndGet();
+            log.warn("Quorum lost — outage episode #{} started", quorumLossCount.get());
+        } else if (hasQuorum && quorumLossStartMs >= 0) {
+            // Quorum restored — outage over
+            quorumLossStartMs = -1;
+        }
+    }
+
+    @Override
+    public void recordRecovery(String nodeId) {
+        Long startMs = failureStartMs.remove(nodeId);
+        if (startMs != null) {
+            double durationSec = (System.currentTimeMillis() - startMs) / 1000.0;
+            mttrSamples.add(durationSec);
+            log.info("MTTR sample recorded for {}: {}s (total samples: {})",
+                nodeId, String.format("%.1f", durationSec), mttrSamples.size());
+        }
+    }
+
+    /**
+     * Avg replication factor = number of nodes that are currently alive.
+     * Each file is replicated to every alive node, so this equals the real
+     * per-file replica count under normal operation.
      */
     private double calculateAverageReplicationFactor(Map<String, NodeHealth> nodeHealthMap) {
         if (nodeHealthMap.isEmpty()) return 0.0;
-        
-        return nodeHealthMap.values().stream()
-            .mapToInt(NodeHealth::getHealthyReplicaCount)
-            .average()
-            .orElse(0.0);
+        return nodeHealthMap.values().stream().filter(NodeHealth::isAlive).count();
     }
     
     /**
@@ -182,46 +240,56 @@ public class FaultToleranceManagerImpl implements FaultToleranceManager {
     }
     
     /**
-     * MTTF = total uptime / number of failures observed.
-     * Returns uptime in seconds when no failures have occurred yet.
+     * MTTF = total uptime / number of quorum-loss events (outages).
+     * Losing 1-2 nodes keeps quorum and is NOT counted as an outage.
+     * Only when 3+ nodes fail (quorum lost) does MTTF tick down.
+     * Returns current uptime when no outage has occurred yet.
      */
-    private double calculateMttf(int currentFailedCount) {
-        long uptimeSeconds = (System.currentTimeMillis() - (systemStartMs == 0 ? System.currentTimeMillis() : systemStartMs)) / 1000;
-        long failures = totalFailureCount.updateAndGet(prev -> Math.max(prev, currentFailedCount));
-        if (failures == 0) return uptimeSeconds > 0 ? uptimeSeconds : 3600.0;
-        return (double) uptimeSeconds / failures;
+    private double calculateMttf() {
+        long uptimeSeconds = systemStartMs > 0
+            ? (System.currentTimeMillis() - systemStartMs) / 1000
+            : 0;
+        long outages = quorumLossCount.get();
+        if (outages == 0) return uptimeSeconds > 0 ? uptimeSeconds : -1.0;
+        return (double) uptimeSeconds / outages;
     }
 
     /**
-     * MTTR = average duration of completed recovery tasks in seconds.
+     * MTTR = average of recorded quorum-outage durations.
+     * A sample is added when simulate-recovery restores quorum.
+     * Returns -1 when no outage has been recovered yet (shown as "—" in UI).
      */
-    private double calculateMttr(List<RecoveryTask> completedTasks) {
-        return completedTasks.stream()
-            .filter(t -> t.getStartedAt() != null && t.getCompletedAt() != null)
-            .mapToLong(t -> ChronoUnit.SECONDS.between(t.getStartedAt(), t.getCompletedAt()))
-            .average()
-            .orElse(30.0); // default 30 s estimate when no tasks completed yet
+    private double calculateMttr() {
+        if (mttrSamples.isEmpty()) return -1.0;
+        return mttrSamples.stream().mapToDouble(Double::doubleValue).average().orElse(-1.0);
     }
 
     /**
-     * Steady-state availability: A = MTTF / (MTTF + MTTR) × 100.
+     * Availability = MTTF / (MTTF + MTTR) × 100.
+     * Requires both values to be available (> 0).
+     * Falls back to 100% when no outage has occurred, or "—" when
+     * MTTF is known but MTTR has not been measured yet.
      */
     private double calculateAvailability(double mttf, double mttr) {
+        if (mttf < 0) return 100.0;   // no outages at all — fully available
+        if (mttr < 0) return -1.0;    // outage happened but not yet recovered
         double denom = mttf + mttr;
         if (denom == 0) return 100.0;
         return (mttf / denom) * 100.0;
     }
 
     /**
-     * Human-readable availability tier label.
+     * Human-readable availability label.
      */
     private String availabilityLabel(double availPct) {
+        if (availPct < 0)       return "Outage in progress";
         if (availPct >= 99.999) return "Five Nines (99.999%)";
         if (availPct >= 99.99)  return "Four Nines (99.99%)";
         if (availPct >= 99.9)   return "Three Nines (99.9%)";
         if (availPct >= 99.0)   return "Two Nines (99%)";
         if (availPct >= 95.0)   return "High Availability (95%)";
-        return String.format("Degraded (%.1f%%)", availPct);
+        if (availPct >= 80.0)   return String.format("Degraded (%.1f%%)", availPct);
+        return String.format("Critical (%.1f%%)", availPct);
     }
 
     /**

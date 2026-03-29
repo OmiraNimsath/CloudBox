@@ -42,4 +42,10 @@ public interface FaultToleranceManager {
      * Check if fault tolerance is currently enabled.
      */
     boolean isEnabled();
+
+    /**
+     * Record that a node has just been recovered.
+     * Computes MTTR sample = now − time the node was first detected as failed.
+     */
+    void recordRecovery(String nodeId);
 }

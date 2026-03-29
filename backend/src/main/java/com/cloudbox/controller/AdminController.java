@@ -11,6 +11,7 @@ import org.springframework.web.client.RestTemplate;
 import com.cloudbox.config.ClusterConfig;
 import com.cloudbox.model.ApiResponse;
 import com.cloudbox.service.FailureDetectionService;
+import com.cloudbox.service.FaultToleranceManager;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -20,7 +21,10 @@ public class AdminController {
 
     @Autowired
     private FailureDetectionService failureDetectionService;
-    
+
+    @Autowired
+    private FaultToleranceManager faultToleranceManager;
+
     @Autowired
     private RestTemplate restTemplate;
 
@@ -51,6 +55,7 @@ public class AdminController {
             log.error("Failed to forward simulate recovery to node {}", nodeId, e);
         }
         failureDetectionService.clearFailureStatus(nodeId.startsWith("node-") ? nodeId : "node-" + nodeId);
+        faultToleranceManager.recordRecovery(nodeId.startsWith("node-") ? nodeId : "node-" + nodeId);
         return ResponseEntity.ok(ApiResponse.ok("Node " + nodeId + " marked as recovered", "Success"));
     }
 }
