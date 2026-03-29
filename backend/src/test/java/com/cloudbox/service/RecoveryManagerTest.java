@@ -31,9 +31,9 @@ class RecoveryManagerTest {
     private RecoveryManager recoveryManager;
     
     @BeforeEach
-    void setUp() {
+    public void setUp() {
         recoveryManager = new RecoveryManagerImpl(failureDetectionService, storageModulePort);
-        recoveryManager.initialize();
+        recoveryManager.initialize(); // activate recovery
     }
     
     @Test

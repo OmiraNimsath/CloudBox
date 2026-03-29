@@ -131,6 +131,7 @@ public class HeartbeatMonitorImpl implements HeartbeatMonitor {
         }
     }
 
+    @SuppressWarnings("java:S2221")
     private boolean pingNode(int remoteNodeId) {
         // This node is always reachable to itself
         if (remoteNodeId == selfNodeId) return true;
@@ -139,7 +140,7 @@ public class HeartbeatMonitorImpl implements HeartbeatMonitor {
             String url = ClusterConfig.getNodeUrl(remoteNodeId) + "/api/health";
             restTemplate.getForObject(url, String.class);
             return true;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return false;
         }
     }
@@ -194,6 +195,7 @@ public class HeartbeatMonitorImpl implements HeartbeatMonitor {
     /**
      * Get the timestamp of the last successful heartbeat for a node.
      */
+    @Override
     public LocalDateTime getLastSeenTime(String nodeId) {
         return lastSeenMap.get(nodeId);
     }
@@ -201,7 +203,9 @@ public class HeartbeatMonitorImpl implements HeartbeatMonitor {
     /**
      * Count how many nodes are currently considered alive (missed < 3).
      */
+    @Override
     public int getAliveNodeCount() {
         return (int) missedHeartbeatMap.values().stream().filter(m -> m < 3).count();
     }
+
 }

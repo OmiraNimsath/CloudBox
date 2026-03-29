@@ -237,7 +237,7 @@ public class SkewDetector {
                 log.debug("Skew measurement node {} -> node {}: {}ms (RTT={}ms)",
                         nodeId, remoteNodeId, skew, rtt);
             }
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.debug("Failed to measure skew with node {}: {}",
                     remoteNodeId, e.getMessage());
         }

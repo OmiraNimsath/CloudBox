@@ -59,4 +59,15 @@ public interface HeartbeatMonitor {
      * Check if monitoring is currently active.
      */
     boolean isMonitoring();
+
+    /**
+     * Get the timestamp of the last successful heartbeat for a node.
+     */
+    java.time.LocalDateTime getLastSeenTime(String nodeId);
+
+    /**
+     * Count how many nodes are currently considered alive (missed heartbeats < threshold).
+     */
+    int getAliveNodeCount();
+
 }

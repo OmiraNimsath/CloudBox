@@ -15,7 +15,7 @@ class ClockSynchronizerTest {
     private TimeSyncProperties properties;
 
     @BeforeEach
-    void setUp() {
+    public void setUp() {
         properties = new TimeSyncProperties();
         RestTemplate restTemplate = new RestTemplate();
         clockSynchronizer = new ClockSynchronizer(properties, restTemplate, 1, 5);
@@ -117,11 +117,7 @@ class ClockSynchronizerTest {
         Thread writeThread = new Thread(() -> {
             for (int i = 0; i < 100; i++) {
                 clockSynchronizer.updateOnSend();
-                try {
-                    Thread.sleep(1);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
+                sleepQuietly(1);
             }
         });
 
@@ -139,5 +135,13 @@ class ClockSynchronizerTest {
         readThread.join();
 
         assertNotNull(clockSynchronizer.getCurrentHLC());
+    }
+
+    private static void sleepQuietly(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

@@ -86,6 +86,7 @@ public class ConsensusModuleAdapter implements ConsensusModulePort {
         if (hb != null && hb.getTimestamp() != null) {
             return hb.getTimestamp().toInstant(ZoneOffset.UTC).toEpochMilli();
         }
+        // Fall back to current time for alive nodes so replica-selection sort is stable
         return isAlive ? System.currentTimeMillis() : 0L;
     }
 }

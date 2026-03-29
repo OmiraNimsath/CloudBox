@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 /**
  * Information about clock skew between nodes.
  * Used to detect and track time drift in the cluster.
+ * Positive skewMillis = node is ahead; negative = node is behind.
  */
 @Data
 @Builder

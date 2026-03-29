@@ -21,7 +21,8 @@ public class FaultToleranceModuleAdapter implements FaultTolerancePort {
     public boolean isNodeWritable(int nodeId) {
         // Check admin-simulated failures via FailureDetectionService
         String nodeKey = "node-" + nodeId;
-        if (failureDetectionService.isNodeUnhealthy(nodeKey)) {
+        boolean unhealthy = failureDetectionService.isNodeUnhealthy(nodeKey);
+        if (unhealthy) {
             return false;
         }
         // Also check cluster partition status
@@ -36,6 +37,6 @@ public class FaultToleranceModuleAdapter implements FaultTolerancePort {
     @Override
     public void recordReplicationFailure(int nodeId, Exception exception) {
         log.warn("Replication failed on node {} due to: {}", nodeId, exception.getMessage());
-        // For actual fault tolerance integration, this could signal the heartbeats to mark it unreachable
+        // Signals the failure for tracking; heartbeat monitor will mark the node unreachable
     }
 }

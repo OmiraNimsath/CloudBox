@@ -1,6 +1,10 @@
 package com.cloudbox.service;
 
 import com.cloudbox.model.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -322,10 +326,10 @@ public class TimeSyncService {
     /**
      * Complete event timestamp for inter-node communication.
      */
-    @lombok.Data
-    @lombok.Builder
-    @lombok.AllArgsConstructor
-    @lombok.NoArgsConstructor
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
     public static class EventTimestamp {
         private int nodeId;
         private HybridLogicalClock hlc;
@@ -336,10 +340,10 @@ public class TimeSyncService {
     /**
      * Health status of time synchronization module.
      */
-    @lombok.Data
-    @lombok.Builder
-    @lombok.AllArgsConstructor
-    @lombok.NoArgsConstructor
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
     public static class TimeSyncHealth {
         private int nodeId;
         private String status;           // HEALTHY, DEGRADED

@@ -93,6 +93,8 @@ public class ConsensusManager {
                 .data(data)
                 .proposerId(nodeId)
                 .timestamp(System.currentTimeMillis())
+                .status("PROPOSED")
+                .ackCount(1)
                 .build();
 
         log.debug("Proposing transaction {}: {}", proposalId, data);

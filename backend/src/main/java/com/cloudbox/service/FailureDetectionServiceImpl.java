@@ -21,7 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class FailureDetectionServiceImpl implements FailureDetectionService {
 
-    private final HeartbeatMonitorImpl heartbeatMonitor;
+    private final HeartbeatMonitor heartbeatMonitor;
 
     @Value("${cloudbox.cluster-size:5}")
     private int clusterSize;
@@ -32,7 +32,7 @@ public class FailureDetectionServiceImpl implements FailureDetectionService {
     private final Map<String, NodeHealth> nodeHealthMap = new ConcurrentHashMap<>();
     private boolean initialized = false;
 
-    public FailureDetectionServiceImpl(HeartbeatMonitorImpl heartbeatMonitor) {
+    public FailureDetectionServiceImpl(HeartbeatMonitor heartbeatMonitor) {
         this.heartbeatMonitor = heartbeatMonitor;
     }
 

@@ -54,7 +54,7 @@ public class ConsensusController {
         try {
             ClusterStatus status = clusterCoordinator.getClusterStatus();
             return ResponseEntity.ok(ApiResponse.ok("Cluster status retrieved", status));
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("Error retrieving cluster status", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.error("Failed to retrieve cluster status: " + e.getMessage()));
@@ -82,7 +82,7 @@ public class ConsensusController {
             }
 
             return ResponseEntity.ok(ApiResponse.ok("Leader information retrieved", leader));
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("Error retrieving leader info", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.error("Failed to retrieve leader info: " + e.getMessage()));
@@ -104,7 +104,7 @@ public class ConsensusController {
         try {
             PartitionStatus partition = clusterCoordinator.getPartitionStatus();
             return ResponseEntity.ok(ApiResponse.ok("Partition status retrieved", partition));
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("Error retrieving partition status", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.error("Failed to retrieve partition status: " + e.getMessage()));
@@ -187,7 +187,7 @@ public class ConsensusController {
             heartbeatData.put("canWrite", clusterCoordinator.canWrite());
 
             return ResponseEntity.ok(ApiResponse.ok("Heartbeat acknowledged", heartbeatData));
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("Error processing heartbeat", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.error("Heartbeat processing failed: " + e.getMessage()));
@@ -207,7 +207,7 @@ public class ConsensusController {
             data.put("isLeader", clusterCoordinator.isLeader());
 
             return ResponseEntity.ok(ApiResponse.ok("Leadership status", data));
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("Error checking leadership", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.error("Leadership check failed: " + e.getMessage()));
@@ -231,7 +231,7 @@ public class ConsensusController {
             data.put("isPartitioned", partition.isPartitioned());
 
             return ResponseEntity.ok(ApiResponse.ok("Write capability status", data));
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("Error checking write capability", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.error("Write capability check failed: " + e.getMessage()));
@@ -262,7 +262,7 @@ public class ConsensusController {
             }
 
             return ResponseEntity.ok(ApiResponse.ok("Consensus module health", health));
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("Error checking consensus health", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.error("Health check failed: " + e.getMessage()));

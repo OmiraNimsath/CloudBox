@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestTemplate;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 class TimeSyncServiceTest {
 
@@ -17,7 +16,7 @@ class TimeSyncServiceTest {
     private TimeSyncProperties properties;
 
     @BeforeEach
-    void setUp() {
+    public void setUp() {
         properties = new TimeSyncProperties();
         properties.setClock_skew_threshold_ms(100);
 
@@ -25,7 +24,7 @@ class TimeSyncServiceTest {
         clockSynchronizer = new ClockSynchronizer(properties, restTemplate, 1, 5);
         skewDetector = new SkewDetector(properties, restTemplate, 1, 5);
 
-        timeSyncService = new TimeSyncService(clockSynchronizer, skewDetector, 1);
+        timeSyncService = new TimeSyncService(clockSynchronizer, skewDetector, 1); // node 1
     }
 
     @Test

@@ -195,7 +195,7 @@ public class ClockSynchronizer {
             } else {
                 synchronizeWithSystemTime();
             }
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("Clock synchronization failed", e);
             // Fallback to system time
             synchronizeWithSystemTime();
@@ -243,7 +243,7 @@ public class ClockSynchronizer {
                 log.debug("Cristian sync with node {}: T0={}, serverTime={}, T1={}, RTT={}ms, offset={}ms",
                         remoteId, t0, serverTime, t1, rtt, offset);
                 return; // Success — one reference node is sufficient
-            } catch (Exception e) {
+            } catch (RuntimeException e) {
                 log.debug("Cristian sync failed for node {}: {}", remoteId, e.getMessage());
             }
         }

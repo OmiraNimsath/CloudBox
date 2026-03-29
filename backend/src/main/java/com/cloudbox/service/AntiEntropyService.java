@@ -50,7 +50,6 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class AntiEntropyService {
 
-    private final MerkleTreeService merkleTreeService;
     private final StorageModulePort storageModulePort;
     private final ConsensusModulePort consensusModulePort;
     private final RestTemplate restTemplate = new RestTemplateBuilder().build();
@@ -205,6 +204,7 @@ public class AntiEntropyService {
     /**
      * Fetches the leader's file list via GET /api/files/list.
      */
+    @SuppressWarnings("java:S2221")
     private List<FileMetadata> fetchLeaderFileList(String leaderUrl) {
         try {
             ResponseEntity<ApiResponse<List<FileMetadata>>> resp = restTemplate.exchange(
@@ -217,7 +217,7 @@ public class AntiEntropyService {
             if (body != null && body.isSuccess() && body.getData() != null) {
                 return body.getData();
             }
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.debug("[Anti-Entropy] Leader unreachable: {}", e.getMessage());
         }
         return null;

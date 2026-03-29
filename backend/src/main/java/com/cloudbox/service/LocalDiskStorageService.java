@@ -91,8 +91,7 @@ public class LocalDiskStorageService implements StorageModulePort {
 
     /**
      * Guard against path-traversal attacks (e.g. fileId = "../../etc/passwd").
-     * Strips any directory component and rejects names that would escape the
-     * node directory after normalisation.
+     * Keeps only the final filename segment; rejects names containing '..' or separators.
      */
     private String sanitizeFileId(String fileId) {
         if (fileId == null || fileId.isBlank()) {

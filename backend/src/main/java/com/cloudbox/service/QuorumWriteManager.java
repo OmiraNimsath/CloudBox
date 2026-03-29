@@ -239,4 +239,5 @@ public class QuorumWriteManager {
 
         return acknowledgedNodeIds;
     }
+
 }

@@ -1,5 +1,6 @@
 package com.cloudbox.controller;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,7 +12,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -52,7 +52,12 @@ public class FileController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "path", defaultValue = "/") String path) {
         try {
-            String fileId = path.equals("/") ? file.getOriginalFilename() : path + file.getOriginalFilename();
+            String originalName = file.getOriginalFilename();
+            if (originalName == null || originalName.isBlank()) {
+                return ResponseEntity.badRequest()
+                        .body(new ApiResponse<>(false, "File name is missing", null));
+            }
+            String fileId = path.equals("/") ? originalName : path + originalName;
             // Simplify fileId if it contains leading slash
             if (fileId.startsWith("/")) {
                 fileId = fileId.substring(1);
@@ -63,7 +68,7 @@ public class FileController {
             QuorumWriteResult result = quorumWriteManager.replicateWrite(fileId, file.getBytes());
             
             return ResponseEntity.ok(new ApiResponse<>(true, "File uploaded and replicated successfully", result));
-        } catch (Exception e) {
+        } catch (IOException | RuntimeException e) {
             log.error("Failed to upload file", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ApiResponse<>(false, "Failed to upload file: " + e.getMessage(), null));

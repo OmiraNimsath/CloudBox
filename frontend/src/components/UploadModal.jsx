@@ -54,6 +54,7 @@ export default function UploadModal({ onClose, onUploaded }) {
       setSuccess(`${files.length} file(s) uploaded successfully`);
       setFiles([]);
       onUploaded?.();
+      setTimeout(() => onClose?.(), 1500);
     } catch (err) {
       setError(err?.response?.data?.message || 'Upload failed');
     } finally {

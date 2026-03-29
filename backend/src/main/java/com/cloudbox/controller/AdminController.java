@@ -37,7 +37,7 @@ public class AdminController {
         // Do NOT instantly mark as failed — let heartbeat monitors on each node
         // accumulate 3 consecutive missed beats naturally before declaring the node
         // unhealthy. This matches realistic failure detection behaviour.
-        return ResponseEntity.ok(ApiResponse.ok("Node " + nodeId + " failure simulation started — node will appear unhealthy after missed heartbeats", "Success"));
+        return ResponseEntity.ok(ApiResponse.ok("Node " + nodeId + " failure simulation started", "Success"));
     }
 
     @PostMapping("/simulate-recovery")

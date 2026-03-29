@@ -5,7 +5,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -29,6 +28,5 @@ public class TimeSyncStatus {
     private long lastSyncAt;      // Last skew detection cycle
     private long ntpOffsetMs;     // Cristian's algorithm offset in milliseconds
     private long lastNtpSyncAt;   // Timestamp of last successful NTP/Cristian sync
-    @Builder.Default
-    private Map<Integer, ClockSkewInfo> nodeSkewMap = new HashMap<>();
+    private Map<Integer, ClockSkewInfo> nodeSkewMap;
 }
