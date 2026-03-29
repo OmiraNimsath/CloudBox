@@ -138,11 +138,10 @@ public class ClockSynchronizer {
                 log.info("Instant clock adjustment: offset = {} ms, total offset = {} ms",
                         ntpOffset, this.systemTimeOffset);
             } else {
-                // Gradual adjustment (damping)
-                long adjustment = ntpOffset / 2; // Dampen by 50%
-                this.systemTimeOffset = (this.systemTimeOffset + adjustment) / 2;
-                log.info("Gradual clock adjustment: offset delta = {} ms, total offset = {} ms",
-                        adjustment, this.systemTimeOffset);
+                // Gradual adjustment: move halfway toward the measured offset each cycle (EWMA)
+                this.systemTimeOffset = this.systemTimeOffset + (ntpOffset - this.systemTimeOffset) / 2;
+                log.info("Gradual clock adjustment: measured offset = {} ms, total offset = {} ms",
+                        ntpOffset, this.systemTimeOffset);
             }
         } finally {
             clockLock.writeLock().unlock();
