@@ -276,7 +276,7 @@ public class ClockSynchronizer {
                     .currentLogicalTimestamp(logicalTimestamp.getTimestamp())
                     .systemTimeOffset(systemTimeOffset)
                     .adjustedPhysicalTime(getAdjustedPhysicalTime())
-                    .lastSyncTime(System.currentTimeMillis())
+                    .lastSyncTime(lastNtpSyncTime)
                     .build();
         } finally {
             clockLock.readLock().unlock();
