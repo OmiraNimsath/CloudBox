@@ -1,5 +1,6 @@
 package com.cloudbox.service;
 
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.curator.framework.CuratorFramework;
@@ -7,6 +8,7 @@ import org.apache.zookeeper.CreateMode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import com.cloudbox.config.ClusterConfig;
 import com.cloudbox.model.ConsensusProposal;
@@ -34,6 +36,9 @@ public class ConsensusManager {
 
     @Autowired
     private PartitionHandler partitionHandler;
+
+    @Autowired
+    private RestTemplate restTemplate;
 
     @Value("${cloudbox.node-id:1}")
     private int nodeId;
@@ -121,12 +126,25 @@ public class ConsensusManager {
     }
 
     /**
-     * Forward proposal to the leader for broadcasting.
+     * Forward proposal to the leader via HTTP POST.
+     *
+     * In ZAB, only the leader may broadcast. Followers must send their
+     * proposals to the leader, which then atomically broadcasts them.
      */
     private void forwardToLeader(ConsensusProposal proposal) throws Exception {
-        log.debug("Node {} forwarding proposal to leader", nodeId);
-        // In a real implementation, would send HTTP request to leader's API
-        broadcastProposal(proposal); // Temporary: followers also write (would coordinate with leader)
+        int leaderId = leaderElectionService.getCurrentLeader() != null
+                ? leaderElectionService.getCurrentLeader().getLeaderId()
+                : -1;
+
+        if (leaderId < 1) {
+            throw new IllegalStateException("No leader available to forward proposal");
+        }
+
+        String leaderUrl = ClusterConfig.getNodeUrl(leaderId) + "/api/cluster/consensus/propose";
+        log.debug("Node {} forwarding proposal {} to leader {} at {}",
+                nodeId, proposal.getProposalId(), leaderId, leaderUrl);
+
+        restTemplate.postForEntity(leaderUrl, Map.of("data", proposal.getData()), Object.class);
     }
 
     /**
