@@ -69,13 +69,18 @@ public class HybridLogicalClock implements Comparable<HybridLogicalClock> {
             this.physicalTime = now;
             this.logicalCounter = 0;
         } else if (Math.max(this.physicalTime, remote.physicalTime) > now) {
-            // Received remote has ahead physical time (clock skew detected)
+            // One or both clocks are ahead of wall time (clock skew detected)
             long maxPt = Math.max(this.physicalTime, remote.physicalTime);
-            if (maxPt == remote.physicalTime) {
-                this.physicalTime = remote.physicalTime;
+            this.physicalTime = maxPt;
+            if (remote.physicalTime > this.physicalTime) {
+                // Remote is strictly ahead: adopt its counter
                 this.logicalCounter = remote.logicalCounter + 1;
-            } else {
+            } else if (this.physicalTime > remote.physicalTime) {
+                // Local is strictly ahead: just increment local counter
                 this.logicalCounter++;
+            } else {
+                // Both equal: must take max of both counters to preserve monotonicity
+                this.logicalCounter = Math.max(this.logicalCounter, remote.logicalCounter) + 1;
             }
         } else {
             // Same physical time
