@@ -294,9 +294,10 @@ public class TimeSyncService {
      */
     public TimeSyncHealth healthCheck() {
         boolean clockSkewHealthy = !skewDetector.isAlertActive();
-        int inSyncNodes = skewDetector.getInSyncNodeCount();
+        int inSyncNodes = skewDetector.getInSyncNodeCount(); // includes self (+1)
         int totalRemoteNodes = skewDetector.getAllSkewInfo().size();
-        boolean allNodesSync = (inSyncNodes == totalRemoteNodes && inSyncNodes > 0) || totalRemoteNodes == 0;
+        // inSyncNodes includes self, totalRemoteNodes does not — subtract 1 before comparing
+        boolean allNodesSync = (inSyncNodes - 1 >= totalRemoteNodes && inSyncNodes > 1) || totalRemoteNodes == 0;
 
         String status = (clockSkewHealthy && allNodesSync) ? "HEALTHY" : "DEGRADED";
 
