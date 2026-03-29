@@ -235,10 +235,15 @@ public class ClockSynchronizer {
                 long offset = t1 - estimatedServerNow;
 
                 adjustTimeOffset(offset);
-                lastNtpSyncTime = System.currentTimeMillis();
-                // Tick the Lamport clock — synchronization is an event
+                // Update lastNtpSyncTime and tick the Lamport clock in a single lock acquisition
+                // so that getMetrics() always observes a consistent snapshot of both fields.
                 clockLock.writeLock().lock();
-                try { logicalTimestamp.increment(); } finally { clockLock.writeLock().unlock(); }
+                try {
+                    lastNtpSyncTime = System.currentTimeMillis();
+                    logicalTimestamp.increment();
+                } finally {
+                    clockLock.writeLock().unlock();
+                }
 
                 log.debug("Cristian sync with node {}: T0={}, serverTime={}, T1={}, RTT={}ms, offset={}ms",
                         remoteId, t0, serverTime, t1, rtt, offset);
