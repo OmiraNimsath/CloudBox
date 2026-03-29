@@ -129,7 +129,13 @@ export async function getConsensusStatus() {
 export async function getTimeSyncStatus() {
   const res = await api.get('/timesync/status');
   const data = res.data.data;
-  return { ...data, offset: (data?.maxClockSkew || 0) / 1000, lastSync: data?.lastSyncAt };
+  return {
+    ...data,
+    // Real Cristian's algorithm offset (ms → s for display)
+    offset: typeof data?.ntpOffsetMs === 'number' ? data.ntpOffsetMs / 1000 : 0,
+    // Last actual NTP/Cristian sync time; fall back to skew report timestamp
+    lastSync: data?.lastNtpSyncAt || data?.lastSyncAt,
+  };
 }
 
 // ── Admin / simulation ───────────────────────────────────────────

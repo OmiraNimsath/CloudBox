@@ -21,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.cloudbox.model.ApiResponse;
 import com.cloudbox.model.FileMetadata;
 import com.cloudbox.config.ReplicationProperties;
+import com.cloudbox.service.ClockSynchronizer;
 import com.cloudbox.service.QuorumWriteManager;
 import com.cloudbox.service.QuorumWriteResult;
 import com.cloudbox.service.StorageModulePort;
@@ -36,12 +37,14 @@ public class FileController {
     private final StorageModulePort storageModulePort;
     private final ConsensusModulePort consensusModulePort;
     private final ReplicationProperties replicationProperties;
+    private final ClockSynchronizer clockSynchronizer;
 
-    public FileController(QuorumWriteManager quorumWriteManager, StorageModulePort storageModulePort, ConsensusModulePort consensusModulePort, ReplicationProperties replicationProperties) {
+    public FileController(QuorumWriteManager quorumWriteManager, StorageModulePort storageModulePort, ConsensusModulePort consensusModulePort, ReplicationProperties replicationProperties, ClockSynchronizer clockSynchronizer) {
         this.quorumWriteManager = quorumWriteManager;
         this.storageModulePort = storageModulePort;
         this.consensusModulePort = consensusModulePort;
         this.replicationProperties = replicationProperties;
+        this.clockSynchronizer = clockSynchronizer;
     }
 
     @PostMapping("/upload")
@@ -55,7 +58,8 @@ public class FileController {
                 fileId = fileId.substring(1);
             }
             log.info("Received request to upload file: {}", fileId);
-            
+            // Tick Lamport clock — upload is a causal send event
+            clockSynchronizer.updateOnSend();
             QuorumWriteResult result = quorumWriteManager.replicateWrite(fileId, file.getBytes());
             
             return ResponseEntity.ok(new ApiResponse<>(true, "File uploaded and replicated successfully", result));
@@ -95,7 +99,9 @@ public class FileController {
             String fileName = fileId.contains("/") ? fileId.substring(fileId.lastIndexOf('/') + 1) : fileId;
             headers.setContentDispositionFormData("attachment", fileName);
 
-return new ResponseEntity<>(content, headers, HttpStatus.OK);
+            // Tick Lamport clock — download is a causal receive event
+            clockSynchronizer.updateOnSend();
+            return new ResponseEntity<>(content, headers, HttpStatus.OK);
         } catch (Exception e) {
             log.error("Failed to download file: {}", path, e);
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
@@ -107,7 +113,8 @@ return new ResponseEntity<>(content, headers, HttpStatus.OK);
         try {
             String fileId = path.startsWith("/") ? path.substring(1) : path;
             log.info("Received request to delete file: {}", fileId);
-
+            // Tick Lamport clock — delete is a causal send event
+            clockSynchronizer.updateOnSend();
             QuorumWriteResult result = quorumWriteManager.quorumDelete(fileId);
             return ResponseEntity.ok(new ApiResponse<>(true, "File deleted successfully", result));
         } catch (Exception e) {

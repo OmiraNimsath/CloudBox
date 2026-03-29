@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  FiServer, FiRefreshCw, FiAlertTriangle,
+  FiServer, FiRefreshCw,
   FiCheckCircle, FiClock, FiShield,
 } from 'react-icons/fi';
 import {

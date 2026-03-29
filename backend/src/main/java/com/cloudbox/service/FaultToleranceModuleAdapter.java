@@ -9,14 +9,22 @@ import lombok.extern.slf4j.Slf4j;
 public class FaultToleranceModuleAdapter implements FaultTolerancePort {
 
     private final ClusterCoordinator clusterCoordinator;
+    private final FailureDetectionService failureDetectionService;
 
-    public FaultToleranceModuleAdapter(ClusterCoordinator clusterCoordinator) {
+    public FaultToleranceModuleAdapter(ClusterCoordinator clusterCoordinator,
+                                       FailureDetectionService failureDetectionService) {
         this.clusterCoordinator = clusterCoordinator;
+        this.failureDetectionService = failureDetectionService;
     }
 
     @Override
     public boolean isNodeWritable(int nodeId) {
-        // Here we can check the node status via ClusterCoordinator if we want to get specific
+        // Check admin-simulated failures via FailureDetectionService
+        String nodeKey = "node-" + nodeId;
+        if (failureDetectionService.isNodeUnhealthy(nodeKey)) {
+            return false;
+        }
+        // Also check cluster partition status
         var status = clusterCoordinator.getClusterStatus();
         if (status != null && status.getNodeStatuses() != null) {
             String state = status.getNodeStatuses().get(nodeId);

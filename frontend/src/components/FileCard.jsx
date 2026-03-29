@@ -6,7 +6,7 @@
 
 import {
   FiFolder, FiFile, FiFileText, FiImage, FiMusic,
-  FiFilm, FiCode, FiArchive,
+  FiFilm, FiCode, FiArchive, FiDownload, FiTrash2,
 } from 'react-icons/fi';
 
 const EXT_ICONS = {
@@ -34,7 +34,7 @@ export function formatSize(bytes) {
 
 export { iconFor };
 
-export default function FileCard({ entry, onClick }) {
+export default function FileCard({ entry, onClick, onDownload, onDelete }) {
   const Icon = iconFor(entry);
   const isFolder = entry.type === 'folder';
 
@@ -42,7 +42,7 @@ export default function FileCard({ entry, onClick }) {
     <div
       onClick={() => onClick(entry)}
       title={entry.name}
-      className="flex flex-col items-center p-4 bg-white border border-gray-200 rounded-md cursor-pointer
+      className="group relative flex flex-col items-center p-4 bg-white border border-gray-200 rounded-md cursor-pointer
                  hover:border-[#0078d4] hover:shadow-sm transition text-center"
     >
       <Icon
@@ -54,6 +54,32 @@ export default function FileCard({ entry, onClick }) {
       </span>
       {!isFolder && entry.size != null && (
         <span className="text-[11px] text-gray-400 mt-1">{formatSize(entry.size)}</span>
+      )}
+
+      {/* Hover action buttons — files only */}
+      {!isFolder && (
+        <div
+          className="absolute inset-0 flex items-center justify-center gap-2
+                     bg-white/80 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            title="Download"
+            onClick={() => onDownload(entry)}
+            className="p-2 rounded-full bg-white border border-gray-200 text-[#0078d4]
+                       hover:bg-[#0078d4] hover:text-white hover:border-[#0078d4] transition shadow-sm"
+          >
+            <FiDownload size={16} />
+          </button>
+          <button
+            title="Delete"
+            onClick={() => onDelete(entry)}
+            className="p-2 rounded-full bg-white border border-gray-200 text-gray-400
+                       hover:bg-red-500 hover:text-white hover:border-red-500 transition shadow-sm"
+          >
+            <FiTrash2 size={16} />
+          </button>
+        </div>
       )}
     </div>
   );

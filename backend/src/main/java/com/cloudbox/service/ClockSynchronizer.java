@@ -27,12 +27,17 @@ public class ClockSynchronizer {
     private final int nodeId;
     private final int totalNodes;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.cloudbox.controller.HealthController healthController;
+
     // Thread-safe clock state
     private final ReentrantReadWriteLock clockLock = new ReentrantReadWriteLock();
 
     private HybridLogicalClock hybridLogicalClock;
     private LogicalTimestamp logicalTimestamp;
     private long systemTimeOffset = 0; // Offset between system time and NTP time
+    private volatile long lastNtpSyncTime = 0; // Timestamp of last successful Cristian sync
 
     public ClockSynchronizer(
             TimeSyncProperties timeSyncProperties,
@@ -59,11 +64,13 @@ public class ClockSynchronizer {
      * This is thread-safe and suitable for timestamping events.
      */
     public HybridLogicalClock getCurrentHLC() {
-        clockLock.readLock().lock();
+        clockLock.writeLock().lock();
         try {
+            // Advance physical time on every read so UI always shows current wall-clock time
+            hybridLogicalClock.updateSend(nodeId);
             return hybridLogicalClock.copy();
         } finally {
-            clockLock.readLock().unlock();
+            clockLock.writeLock().unlock();
         }
     }
 
@@ -163,6 +170,13 @@ public class ClockSynchronizer {
     }
 
     /**
+     * Get the timestamp of the last successful Cristian/NTP synchronization.
+     */
+    public long getLastNtpSyncTime() {
+        return lastNtpSyncTime;
+    }
+
+    /**
      * Synchronize clocks with NTP server or system time (scheduled task).
      * Runs at configured interval.
      */
@@ -172,6 +186,9 @@ public class ClockSynchronizer {
             timeUnit = java.util.concurrent.TimeUnit.MILLISECONDS
     )
     public void synchronizeClocks() {
+        if (healthController != null && healthController.isSimulatingFailure()) {
+            return;
+        }
         try {
             if (timeSyncProperties.isEnable_ntp()) {
                 synchronizeWithNTP();
@@ -218,6 +235,10 @@ public class ClockSynchronizer {
                 long offset = t1 - estimatedServerNow;
 
                 adjustTimeOffset(offset);
+                lastNtpSyncTime = System.currentTimeMillis();
+                // Tick the Lamport clock — synchronization is an event
+                clockLock.writeLock().lock();
+                try { logicalTimestamp.increment(); } finally { clockLock.writeLock().unlock(); }
 
                 log.debug("Cristian sync with node {}: T0={}, serverTime={}, T1={}, RTT={}ms, offset={}ms",
                         remoteId, t0, serverTime, t1, rtt, offset);

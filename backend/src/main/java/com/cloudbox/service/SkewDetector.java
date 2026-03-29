@@ -29,6 +29,14 @@ public class SkewDetector {
     private final int nodeId;
     private final int totalNodes;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.cloudbox.controller.HealthController healthController;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private FailureDetectionService failureDetectionService;
+
     private final ReentrantReadWriteLock skewLock = new ReentrantReadWriteLock();
     private final Map<Integer, ClockSkewInfo> skewMap = new HashMap<>();
     private long maxClockSkew = 0;
@@ -88,11 +96,14 @@ public class SkewDetector {
 
             skewMap.put(remoteNodeId, skewInfo);
 
-            // Update global max skew
-            maxClockSkew = skewMap.values().stream()
-                    .mapToLong(info -> Math.abs(info.getSkewMillis()))
+            // Update global max skew (historical peak — never decreases)
+            long currentMax = skewMap.values().stream()
+                    .mapToLong(info -> Math.abs(info.getMaxSkewMillis()))
                     .max()
                     .orElse(0);
+            if (currentMax > maxClockSkew) {
+                maxClockSkew = currentMax;
+            }
 
             // Recompute global alert from all nodes (fixes alertActive never resetting)
             alertActive = skewMap.values().stream()
@@ -182,6 +193,9 @@ public class SkewDetector {
             timeUnit = java.util.concurrent.TimeUnit.MILLISECONDS
     )
     public void detectSkew() {
+        if (healthController != null && healthController.isSimulatingFailure()) {
+            return;
+        }
         try {
             List<Integer> remoteNodeIds = getRemoteNodeIds();
             for (int remoteNodeId : remoteNodeIds) {
@@ -193,24 +207,35 @@ public class SkewDetector {
     }
 
     /**
-     * Measure skew with a specific remote node.
-     * Fetches remote node's current time and compares with local time.
+     * Measure skew with a specific remote node using Cristian's RTT formula.
+     * Fetches remote node's current time and corrects for network round-trip.
+     * Skips nodes already known to be unhealthy to avoid wasting calls and
+     * leaving stale skew entries in the map.
      */
     private void measureSkewWithNode(int remoteNodeId) {
+        // Skip nodes that are already known failed — stale pings produce noise
+        if (failureDetectionService != null
+                && failureDetectionService.isNodeUnhealthy("node-" + remoteNodeId)) {
+            return;
+        }
         try {
             String remoteUrl = String.format("http://localhost:%d/api/timesync/time",
                     8080 + remoteNodeId - 1);
 
-            // Try to fetch remote time
+            long t0 = System.currentTimeMillis();
             Long remoteTime = restTemplate.getForObject(remoteUrl, Long.class);
+            long t1 = System.currentTimeMillis();
+
             if (remoteTime != null) {
-                long localTime = System.currentTimeMillis();
-                long skew = remoteTime - localTime; // Positive = remote ahead
+                long rtt = t1 - t0;
+                // Cristian: estimate remote time at the moment we received the response
+                long estimatedRemoteNow = remoteTime + rtt / 2;
+                long skew = estimatedRemoteNow - t1; // positive = remote ahead
 
                 recordSkew(remoteNodeId, skew);
 
-                log.debug("Skew measurement node {} -> node {}: {}ms",
-                        nodeId, remoteNodeId, skew);
+                log.debug("Skew measurement node {} -> node {}: {}ms (RTT={}ms)",
+                        nodeId, remoteNodeId, skew, rtt);
             }
         } catch (Exception e) {
             log.debug("Failed to measure skew with node {}: {}",
@@ -233,14 +258,22 @@ public class SkewDetector {
 
     /**
      * Get synchronization status - count of nodes within acceptable skew.
+     * Includes self (this node always has 0 skew with itself).
+     * Excludes nodes that are unhealthy/failed even if their last skew reading was fine.
      */
     public int getInSyncNodeCount() {
         skewLock.readLock().lock();
         try {
             long threshold = timeSyncProperties.getClock_skew_threshold_ms();
-            return (int) skewMap.values().stream()
+            int remoteInSync = (int) skewMap.values().stream()
                     .filter(info -> Math.abs(info.getSkewMillis()) <= threshold)
+                    .filter(info -> {
+                        // Exclude nodes that are unhealthy — stale skew readings are misleading
+                        if (failureDetectionService == null) return true;
+                        return !failureDetectionService.isNodeUnhealthy("node-" + info.getNodeId());
+                    })
                     .count();
+            return remoteInSync + 1; // +1 for self (always in sync with itself)
         } finally {
             skewLock.readLock().unlock();
         }
@@ -263,12 +296,56 @@ public class SkewDetector {
 
     /**
      * Get comprehensive skew report for monitoring/debugging.
+     * Includes self-node with skew=0 so the table always shows all 5 nodes.
      */
     public SkewReport generateReport() {
         skewLock.readLock().lock();
         try {
-            List<ClockSkewInfo> skewList = new ArrayList<>(skewMap.values());
-            int inSyncCount = getInSyncNodeCount();
+            // Deep-copy entries so we can set nodeStatus without touching shared skewMap objects
+            List<ClockSkewInfo> skewList = new ArrayList<>();
+            for (ClockSkewInfo info : skewMap.values()) {
+                skewList.add(ClockSkewInfo.builder()
+                        .nodeId(info.getNodeId())
+                        .skewMillis(info.getSkewMillis())
+                        .maxSkewMillis(info.getMaxSkewMillis())
+                        .alertTriggered(info.isAlertTriggered())
+                        .lastMeasuredAt(info.getLastMeasuredAt())
+                        .build());
+            }
+
+            // Ensure ALL cluster nodes appear; add placeholders for nodes never measured
+            for (int i = 1; i <= totalNodes; i++) {
+                final int id = i;
+                boolean exists = skewList.stream().anyMatch(s -> s.getNodeId() == id);
+                if (!exists) {
+                    skewList.add(ClockSkewInfo.builder()
+                            .nodeId(id)
+                            .skewMillis(0)
+                            .maxSkewMillis(0)
+                            .alertTriggered(false)
+                            .lastMeasuredAt(0)
+                            .nodeStatus(id == nodeId ? "HEALTHY" : "UNREACHABLE")
+                            .build());
+                }
+            }
+
+            // Enrich each entry with live failure status from FailureDetectionService
+            for (ClockSkewInfo info : skewList) {
+                if (info.getNodeStatus() != null) continue; // already set for placeholders
+                if (info.getNodeId() == nodeId) {
+                    info.setNodeStatus("HEALTHY");
+                } else if (failureDetectionService != null) {
+                    boolean unhealthy = failureDetectionService.isNodeUnhealthy("node-" + info.getNodeId());
+                    info.setNodeStatus(unhealthy ? "FAILED" : "HEALTHY");
+                } else {
+                    info.setNodeStatus("HEALTHY");
+                }
+            }
+
+            // Sort by nodeId for stable ordering
+            skewList.sort(java.util.Comparator.comparingInt(ClockSkewInfo::getNodeId));
+
+            int inSyncCount = getInSyncNodeCount(); // already includes self
             long threshold = timeSyncProperties.getClock_skew_threshold_ms();
 
             return SkewReport.builder()
@@ -278,6 +355,7 @@ public class SkewDetector {
                     .threshold(threshold)
                     .alertActive(alertActive)
                     .inSyncNodeCount(inSyncCount)
+                    .totalNodes(totalNodes)
                     .totalRemoteNodes(skewMap.size())
                     .alertNodeCount((int) skewList.stream().filter(info -> info.getSkewMillis() > threshold || info.getSkewMillis() < -threshold).count())
                     .skewDetails(skewList)
@@ -287,9 +365,6 @@ public class SkewDetector {
         }
     }
 
-    /**
-     * Report structure for detailed skew analytics.
-     */
     @lombok.Data
     @lombok.Builder
     @lombok.AllArgsConstructor
@@ -301,8 +376,9 @@ public class SkewDetector {
         private long threshold;
         private boolean alertActive;
         private int inSyncNodeCount;
-        private int totalRemoteNodes;
+        private int totalNodes;        // full cluster size (includes self)
+        private int totalRemoteNodes;  // remote nodes measured so far
         private int alertNodeCount;
-        private List<ClockSkewInfo> skewDetails;
+        private java.util.List<ClockSkewInfo> skewDetails;
     }
 }

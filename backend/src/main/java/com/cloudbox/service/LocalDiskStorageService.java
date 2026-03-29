@@ -17,6 +17,9 @@ public class LocalDiskStorageService implements StorageModulePort {
 
     private static final String BASE_DIR = "data";
 
+    @org.springframework.beans.factory.annotation.Value("${cloudbox.node-id:1}")
+    private int currentNodeId;
+
     public LocalDiskStorageService() {
         createBaseDirectories();
     }
@@ -65,30 +68,22 @@ public class LocalDiskStorageService implements StorageModulePort {
     @Override
     public List<FileMetadata> listFiles() throws Exception {
         List<FileMetadata> allFiles = new ArrayList<>();
-        File baseDirFile = new File(BASE_DIR);
-        if (!baseDirFile.exists()) return allFiles;
+        // Only list files from THIS node's directory (not all nodes on disk)
+        File nodeDir = new File(BASE_DIR, "node-" + currentNodeId);
+        if (!nodeDir.exists() || !nodeDir.isDirectory()) return allFiles;
 
-        File[] nodeDirs = baseDirFile.listFiles();
-        if (nodeDirs == null) return allFiles; // directory empty or I/O error
+        File[] files = nodeDir.listFiles();
+        if (files == null) return allFiles;
 
-        List<String> distinctFileIds = new ArrayList<>();
-        for (File nodeDir : nodeDirs) {
-            if (nodeDir.isDirectory()) {
-                File[] files = nodeDir.listFiles();
-                if (files != null) {
-                    for (File file : files) {
-                        if (!distinctFileIds.contains(file.getName())) {
-                            distinctFileIds.add(file.getName());
-                            allFiles.add(FileMetadata.builder()
-                                    .name(file.getName())
-                                    .path("/" + file.getName())
-                                    .size(file.length())
-                                    .lastModified(file.lastModified())
-                                    .type("file")
-                                    .build());
-                        }
-                    }
-                }
+        for (File file : files) {
+            if (file.isFile()) {
+                allFiles.add(FileMetadata.builder()
+                        .name(file.getName())
+                        .path("/" + file.getName())
+                        .size(file.length())
+                        .lastModified(file.lastModified())
+                        .type("file")
+                        .build());
             }
         }
         return allFiles;

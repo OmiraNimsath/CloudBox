@@ -20,4 +20,5 @@ public class ClockSkewInfo {
     private long maxSkewMillis;   // Maximum observed skew
     private boolean alertTriggered; // Alert if skew exceeds threshold
     private long lastMeasuredAt;  // Timestamp of last measurement
+    private String nodeStatus;    // "HEALTHY", "FAILED", or "UNREACHABLE"
 }

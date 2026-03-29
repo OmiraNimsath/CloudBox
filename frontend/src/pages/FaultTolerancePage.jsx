@@ -69,7 +69,12 @@ export default function FaultTolerancePage() {
     return <div className="p-6 text-gray-500">Loading fault tolerance status…</div>;
   }
 
-  const nodes = Object.values(status.nodeHealthMap || {});
+  const nodes = Object.values(status.nodeHealthMap || {})
+    .sort((a, b) => {
+      const idA = parseInt(a.nodeId?.replace('node-', '') || '0');
+      const idB = parseInt(b.nodeId?.replace('node-', '') || '0');
+      return idA - idB;
+    });
 
   return (
     <div className="space-y-6">

@@ -194,8 +194,11 @@ public class TimeSyncService {
                 .logicalTimestamp(logTS.getTimestamp())
                 .synced(!skewDetector.isAlertActive())
                 .maxClockSkew(skewReport.getMaxClockSkew())
-                .syncedNodeCount(skewReport.getInSyncNodeCount())
+                .syncedNodeCount(skewReport.getInSyncNodeCount()) // already includes self
+                .totalNodes(skewReport.getTotalNodes())
                 .lastSyncAt(skewReport.getTimestamp())
+                .ntpOffsetMs(clockSynchronizer.getSystemTimeOffset())
+                .lastNtpSyncAt(clockSynchronizer.getLastNtpSyncTime())
                 .nodeSkewMap(skewMap)
                 .build();
     }

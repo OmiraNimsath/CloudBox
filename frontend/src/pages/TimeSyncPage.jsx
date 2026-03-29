@@ -80,7 +80,7 @@ export default function TimeSyncPage() {
           <span className="text-lg font-mono">{status.maxClockSkew ?? 0} ms</span>
         </Card>
         <Card label="Synced Nodes">
-          <span className="text-lg font-mono">{status.syncedNodeCount ?? 0} / {(report.totalRemoteNodes ?? 0) + 1}</span>
+          <span className="text-lg font-mono">{status.syncedNodeCount ?? 0} / {status.totalNodes ?? report.totalNodes ?? 5}</span>
         </Card>
         <Card label="Skew Threshold">
           <span className="text-lg font-mono">{report.threshold ?? 100} ms</span>
@@ -113,6 +113,7 @@ export default function TimeSyncPage() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-4 py-2 text-left">Node</th>
+                <th className="px-4 py-2 text-center">Status</th>
                 <th className="px-4 py-2 text-right">Skew</th>
                 <th className="px-4 py-2 text-right">Max Skew</th>
                 <th className="px-4 py-2 text-center">Alert</th>
@@ -121,22 +122,37 @@ export default function TimeSyncPage() {
             </thead>
             <tbody>
               {report.skewDetails.map((n) => {
-                const absSkew = Math.abs(n.skewMillis);
                 const alert = n.alertTriggered;
+                const nodeStatus = n.nodeStatus ?? 'HEALTHY';
+                const isDown = nodeStatus === 'FAILED' || nodeStatus === 'UNREACHABLE';
                 return (
-                  <tr key={n.nodeId} className="border-t hover:bg-gray-50">
+                  <tr key={n.nodeId} className={`border-t ${isDown ? 'bg-gray-50 opacity-60' : 'hover:bg-gray-50'}`}>
                     <td className="px-4 py-2 font-mono">Node {n.nodeId}</td>
-                    <td className={`px-4 py-2 text-right font-mono ${alert ? 'text-red-600 font-bold' : ''}`}>
-                      {n.skewMillis > 0 ? '+' : ''}{n.skewMillis} ms
-                    </td>
-                    <td className="px-4 py-2 text-right font-mono">{n.maxSkewMillis} ms</td>
                     <td className="px-4 py-2 text-center">
-                      {alert
-                        ? <span className="inline-block w-3 h-3 rounded-full bg-red-500" title="Skew exceeds threshold" />
-                        : <span className="inline-block w-3 h-3 rounded-full bg-green-500" title="Within threshold" />
+                      {nodeStatus === 'FAILED'
+                        ? <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">FAILED</span>
+                        : nodeStatus === 'UNREACHABLE'
+                          ? <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-gray-200 text-gray-600">UNREACHABLE</span>
+                          : <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700">HEALTHY</span>
                       }
                     </td>
-                    <td className="px-4 py-2 text-right text-gray-500">{msAgo(n.lastMeasuredAt)}</td>
+                    <td className={`px-4 py-2 text-right font-mono ${!isDown && alert ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
+                      {isDown ? '—' : `${n.skewMillis > 0 ? '+' : ''}${n.skewMillis} ms`}
+                    </td>
+                    <td className="px-4 py-2 text-right font-mono text-gray-400">
+                      {isDown ? '—' : `${n.maxSkewMillis} ms`}
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      {isDown
+                        ? <span className="inline-block w-3 h-3 rounded-full bg-gray-300" title="Node down" />
+                        : alert
+                          ? <span className="inline-block w-3 h-3 rounded-full bg-red-500" title="Skew exceeds threshold" />
+                          : <span className="inline-block w-3 h-3 rounded-full bg-green-500" title="Within threshold" />
+                      }
+                    </td>
+                    <td className="px-4 py-2 text-right text-gray-500">
+                      {isDown && !n.lastMeasuredAt ? '—' : msAgo(n.lastMeasuredAt)}
+                    </td>
                   </tr>
                 );
               })}

@@ -23,9 +23,12 @@ public class TimeSyncStatus {
     private long hlcLogicalCounter; // HLC logical counter component
     private long logicalTimestamp;  // Lamport timestamp
     private boolean synced;       // Whether clocks are synchronized
-    private long maxClockSkew;    // Maximum clock skew in cluster
-    private int syncedNodeCount;  // Number of synced nodes
-    private long lastSyncAt;      // Last successful sync time
+    private long maxClockSkew;    // Maximum clock skew in cluster (ms)
+    private int syncedNodeCount;  // Number of synced nodes (including self)
+    private int totalNodes;       // Total nodes in cluster
+    private long lastSyncAt;      // Last skew detection cycle
+    private long ntpOffsetMs;     // Cristian's algorithm offset in milliseconds
+    private long lastNtpSyncAt;   // Timestamp of last successful NTP/Cristian sync
     @Builder.Default
-    private Map<Integer, ClockSkewInfo> nodeSkewMap = new HashMap<>(); // Skew per node
+    private Map<Integer, ClockSkewInfo> nodeSkewMap = new HashMap<>();
 }

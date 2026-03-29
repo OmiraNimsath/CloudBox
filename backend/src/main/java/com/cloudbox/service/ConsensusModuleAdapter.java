@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.cloudbox.config.ClusterConfig;
 import com.cloudbox.model.HeartbeatInfo;
 import com.cloudbox.model.NodeStatus;
 
@@ -44,6 +45,8 @@ public class ConsensusModuleAdapter implements ConsensusModulePort {
 
                 nodes.add(NodeStatus.builder()
                         .nodeId(nodeId)
+                        .host("localhost")
+                        .port(ClusterConfig.BASE_PORT + nodeId - 1)
                         .alive(isAlive)
                         .isLeader(isLeader)
                         .role(isLeader ? "leader" : "follower")
@@ -60,6 +63,8 @@ public class ConsensusModuleAdapter implements ConsensusModulePort {
                 long lastHeartbeatMs = resolveLastHeartbeat("node-" + i, true);
                 nodes.add(NodeStatus.builder()
                         .nodeId(i)
+                        .host("localhost")
+                        .port(ClusterConfig.BASE_PORT + i - 1)
                         .alive(true)
                         .isLeader(isLeader)
                         .role(isLeader ? "leader" : "follower")

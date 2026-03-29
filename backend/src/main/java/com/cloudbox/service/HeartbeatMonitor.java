@@ -49,7 +49,12 @@ public interface HeartbeatMonitor {
      * Reset missed heartbeat counter for a node.
      */
     void resetMissedHeartbeats(String nodeId);
-    
+
+    /**
+     * Force the missed-heartbeat counter to a given value (used by simulated failures).
+     */
+    void forceMissedHeartbeats(String nodeId, long count);
+
     /**
      * Check if monitoring is currently active.
      */

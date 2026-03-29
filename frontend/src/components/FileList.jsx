@@ -71,6 +71,8 @@ export default function FileList({
               key={entry.name}
               entry={entry}
               onClick={entry.type === 'folder' ? onNavigate : onDownload}
+              onDownload={onDownload}
+              onDelete={onDelete}
             />
           ))}
         </div>

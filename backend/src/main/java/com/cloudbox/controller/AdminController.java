@@ -34,8 +34,10 @@ public class AdminController {
         } catch (Exception e) {
             log.error("Failed to forward simulate failure to node {}", nodeId, e);
         }
-        failureDetectionService.markNodeAsFailed(nodeId.startsWith("node-") ? nodeId : "node-" + nodeId, "Simulated administrative failure");
-        return ResponseEntity.ok(ApiResponse.ok("Node " + nodeId + " marked as failed", "Success"));
+        // Do NOT instantly mark as failed — let heartbeat monitors on each node
+        // accumulate 3 consecutive missed beats naturally before declaring the node
+        // unhealthy. This matches realistic failure detection behaviour.
+        return ResponseEntity.ok(ApiResponse.ok("Node " + nodeId + " failure simulation started — node will appear unhealthy after missed heartbeats", "Success"));
     }
 
     @PostMapping("/simulate-recovery")

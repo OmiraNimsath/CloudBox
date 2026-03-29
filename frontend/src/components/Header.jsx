@@ -4,7 +4,7 @@
  * Logo, search placeholder, cluster health dot, and Upload button.
  */
 
-import { FiCloud, FiUploadCloud, FiSearch } from 'react-icons/fi';
+import { FiCloud, FiUploadCloud } from 'react-icons/fi';
 
 export default function Header({ clusterInfo, onUploadClick }) {
   const aliveCount = clusterInfo?.alive ?? 0;
@@ -27,12 +27,6 @@ export default function Header({ clusterInfo, onUploadClick }) {
       <div className="flex items-center gap-3 text-base font-semibold">
         <FiCloud className="text-xl" />
         <span>CloudBox</span>
-      </div>
-
-      {/* Centre — search bar (placeholder) */}
-      <div className="hidden sm:flex items-center bg-white/15 rounded px-3 py-1 w-80 text-sm text-white/80 gap-2">
-        <FiSearch className="text-white/60" />
-        <span>Search files…</span>
       </div>
 
       {/* Right — cluster + upload */}
