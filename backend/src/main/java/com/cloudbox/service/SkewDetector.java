@@ -357,7 +357,7 @@ public class SkewDetector {
                     .inSyncNodeCount(inSyncCount)
                     .totalNodes(totalNodes)
                     .totalRemoteNodes(skewMap.size())
-                    .alertNodeCount((int) skewList.stream().filter(info -> info.getSkewMillis() > threshold || info.getSkewMillis() < -threshold).count())
+                    .alertNodeCount((int) skewList.stream().filter(ClockSkewInfo::isAlertTriggered).count())
                     .skewDetails(skewList)
                     .build();
         } finally {
