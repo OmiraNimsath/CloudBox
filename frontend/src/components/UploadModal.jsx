@@ -51,9 +51,8 @@ export default function UploadModal({ currentPath = '/', onClose, onUploaded }) 
     setError('');
     setSuccess('');
     try {
-      const base = '/'; // Forced flat filesystem
       for (const file of files) {
-        await uploadFile(file, base);
+        await uploadFile(file, destPath);
       }
       setSuccess(`${files.length} file(s) uploaded successfully`);
       setFiles([]);
@@ -93,6 +92,20 @@ export default function UploadModal({ currentPath = '/', onClose, onUploaded }) 
             </p>
             <p className="text-xs text-gray-400 mt-1">Max 100 MB per file</p>
             <input ref={inputRef} type="file" multiple hidden onChange={onBrowse} />
+          </div>
+
+          {/* Destination path */}
+          <div className="mt-4">
+            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
+              Destination folder
+            </label>
+            <input
+              type="text"
+              value={destPath}
+              onChange={(e) => setDestPath(e.target.value)}
+              placeholder="/"
+              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0078d4]"
+            />
           </div>
 
           {/* Selected files */}
