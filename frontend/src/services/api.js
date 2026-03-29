@@ -167,3 +167,9 @@ export async function getReplicationStatus() {
   const res = await api.get('/files/replication-status');
   return res.data.data;
 }
+
+/** Get detailed clock-skew report (per-node skew, alerts, thresholds). */
+export async function getSkewReport() {
+  const res = await api.get('/timesync/skew-report');
+  return res.data.data;
+}

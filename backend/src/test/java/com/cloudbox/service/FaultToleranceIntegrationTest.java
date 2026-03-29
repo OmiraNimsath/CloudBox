@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -23,6 +24,9 @@ class FaultToleranceIntegrationTest {
     @Mock
     private HeartbeatMonitor heartbeatMonitor;
     
+    @Mock
+    private StorageModulePort storageModulePort;
+    
     private FailureDetectionService failureDetectionService;
     private RecoveryManager recoveryManager;
     private FaultToleranceManager faultToleranceManager;
@@ -30,7 +34,7 @@ class FaultToleranceIntegrationTest {
     @BeforeEach
     void setUp() {
         failureDetectionService = new FailureDetectionServiceImpl(heartbeatMonitor);
-        recoveryManager = new RecoveryManagerImpl(failureDetectionService);
+        recoveryManager = new RecoveryManagerImpl(failureDetectionService, storageModulePort);
         faultToleranceManager = new FaultToleranceManagerImpl(
             heartbeatMonitor,
             failureDetectionService,

@@ -21,8 +21,8 @@ class TimeSyncServiceTest {
         properties = new TimeSyncProperties();
         properties.setClock_skew_threshold_ms(100);
 
-        RestTemplate restTemplate = mock(RestTemplate.class);
-        clockSynchronizer = new ClockSynchronizer(properties, 1);
+        RestTemplate restTemplate = new RestTemplate();
+        clockSynchronizer = new ClockSynchronizer(properties, restTemplate, 1, 5);
         skewDetector = new SkewDetector(properties, restTemplate, 1, 5);
 
         timeSyncService = new TimeSyncService(clockSynchronizer, skewDetector, 1);

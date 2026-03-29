@@ -25,11 +25,14 @@ class RecoveryManagerTest {
     @Mock
     private FailureDetectionService failureDetectionService;
     
+    @Mock
+    private StorageModulePort storageModulePort;
+    
     private RecoveryManager recoveryManager;
     
     @BeforeEach
     void setUp() {
-        recoveryManager = new RecoveryManagerImpl(failureDetectionService);
+        recoveryManager = new RecoveryManagerImpl(failureDetectionService, storageModulePort);
         recoveryManager.initialize();
     }
     

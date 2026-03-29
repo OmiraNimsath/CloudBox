@@ -5,6 +5,7 @@ import com.cloudbox.model.HybridLogicalClock;
 import com.cloudbox.model.LogicalTimestamp;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.client.RestTemplate;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -16,7 +17,8 @@ class ClockSynchronizerTest {
     @BeforeEach
     void setUp() {
         properties = new TimeSyncProperties();
-        clockSynchronizer = new ClockSynchronizer(properties, 1);
+        RestTemplate restTemplate = new RestTemplate();
+        clockSynchronizer = new ClockSynchronizer(properties, restTemplate, 1, 5);
     }
 
     @Test
