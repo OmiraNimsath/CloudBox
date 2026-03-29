@@ -3,13 +3,14 @@
  */
 
 import { NavLink } from 'react-router-dom';
-import { FiFolder, FiServer, FiAlertTriangle, FiDatabase } from 'react-icons/fi';
+import { FiFolder, FiServer, FiAlertTriangle, FiDatabase, FiClock } from 'react-icons/fi';
 
 const links = [
   { to: '/', label: 'My Files', icon: <FiFolder /> },
   { to: '/cluster', label: 'Cluster Status', icon: <FiServer /> },
   { to: '/fault-tolerance', label: 'Fault Tolerance', icon: <FiAlertTriangle /> },
   { to: '/replication', label: 'Replication', icon: <FiDatabase /> },
+  { to: '/time-sync', label: 'Time Sync', icon: <FiClock /> },
 ];
 
 export default function Sidebar() {
