@@ -101,7 +101,7 @@ export default function ClusterView() {
           </StatCard>
           <StatCard label="ZAB Leader">
             <span className="text-lg font-bold text-[#0078d4]">
-              {leaderId ? `Node ${leaderId}` : 'â€”'}
+              {leaderId ? `Node ${leaderId}` : '—'}
             </span>
           </StatCard>
         </div>
@@ -179,7 +179,7 @@ export default function ClusterView() {
           );
         })}
         {nodes.length === 0 && (
-          <p className="col-span-full text-sm text-gray-400">No node data â€” is the backend running?</p>
+          <p className="col-span-full text-sm text-gray-400">No node data — is the backend running?</p>
         )}
       </div>
 
@@ -195,9 +195,9 @@ export default function ClusterView() {
               <h2 className="font-semibold text-gray-800">ZAB Consensus</h2>
             </div>
             <div className="space-y-3">
-              <InfoRow label="Leader"><span className="font-semibold text-[#0078d4]">Node {consensus.leaderId ?? 'â€”'}</span></InfoRow>
-              <InfoRow label="Election Epoch">{consensus.electionEpoch ?? 'â€”'}</InfoRow>
-              <InfoRow label="ZXID"><span className="font-mono">{consensus.zxid ?? 'â€”'}</span></InfoRow>
+              <InfoRow label="Leader"><span className="font-semibold text-[#0078d4]">Node {consensus.leaderId ?? '—'}</span></InfoRow>
+              <InfoRow label="Election Epoch">{consensus.electionEpoch ?? '—'}</InfoRow>
+              <InfoRow label="ZXID"><span className="font-mono">{consensus.zxid ?? '—'}</span></InfoRow>
               <InfoRow label="Leader Alive">
                 <span className={`flex items-center gap-1.5 font-medium ${consensus.leaderAlive ? 'text-green-600' : 'text-red-600'}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${consensus.leaderAlive ? 'bg-green-500' : 'bg-red-500'}`} />
@@ -231,7 +231,7 @@ export default function ClusterView() {
                 </span>
               </InfoRow>
               <InfoRow label="Reachable Nodes">
-                <span className="font-semibold">{consensus.reachableNodes ?? 'â€”'} / 5</span>
+                <span className="font-semibold">{consensus.reachableNodes ?? '—'} / 5</span>
               </InfoRow>
               <InfoRow label="Write Quorum">
                 <span className={`font-semibold ${consensus.canWrite ? 'text-green-600' : 'text-red-600'}`}>
@@ -240,9 +240,9 @@ export default function ClusterView() {
               </InfoRow>
               <InfoRow label="Read Quorum">
                 <span className={`font-semibold ${
-                  (consensus.reachableNodes ?? 0) >= 2 ? 'text-green-600' : 'text-red-600'
+                  (consensus.reachableNodes ?? 0) >= 3 ? 'text-green-600' : 'text-red-600'
                 }`}>
-                  {(consensus.reachableNodes ?? 0) >= 2 ? '≥ 2 nodes · Available' : '< 2 nodes · Blocked'}
+                  {(consensus.reachableNodes ?? 0) >= 3 ? '≥ 3 nodes · Available' : '< 3 nodes · Blocked'}
                 </span>
               </InfoRow>
             </div>

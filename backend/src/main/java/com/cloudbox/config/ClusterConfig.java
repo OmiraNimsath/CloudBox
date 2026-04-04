@@ -22,7 +22,7 @@ public class ClusterConfig {
     public static final int QUORUM_SIZE = 3;
 
     /** Minimum nodes that must confirm a file exists before a read is served. */
-    public static final int READ_QUORUM = 2;
+    public static final int READ_QUORUM = 3;
 
     /** Every file is replicated to all nodes. */
     public static final int REPLICATION_FACTOR = 5;
