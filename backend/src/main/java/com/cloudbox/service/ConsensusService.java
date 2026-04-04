@@ -1,9 +1,6 @@
 package com.cloudbox.service;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -50,7 +47,6 @@ public class ConsensusService extends LeaderSelectorListenerAdapter {
 
     private static final String ELECTION_PATH = "/cloudbox/election";
     private static final long LEADER_HEARTBEAT_MS = 3_000;
-    private static final long LEADER_TIMEOUT_MS = 10_000;
 
     private final CuratorFramework curator;
     private final NodeRegistry nodeRegistry;
@@ -60,7 +56,6 @@ public class ConsensusService extends LeaderSelectorListenerAdapter {
     private LeaderSelector leaderSelector;
     private final AtomicReference<ConsensusStatus> latestStatus = new AtomicReference<>();
     private final AtomicLong zxid = new AtomicLong(0);
-    private volatile boolean isLeader = false;
     private volatile long electionEpoch = 0;
     private volatile long lastLeaderHeartbeat = 0;
     private volatile int stableLeaderId = -1;
@@ -93,7 +88,6 @@ public class ConsensusService extends LeaderSelectorListenerAdapter {
 
     @Override
     public void takeLeadership(CuratorFramework client) throws Exception {
-        isLeader = true;
         electionEpoch = System.currentTimeMillis();
         zxid.incrementAndGet();
         nodeRegistry.markLeader(nodeId);
@@ -108,7 +102,6 @@ public class ConsensusService extends LeaderSelectorListenerAdapter {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
-            isLeader = false;
             refreshStatus();
         }
     }
@@ -175,9 +168,7 @@ public class ConsensusService extends LeaderSelectorListenerAdapter {
             }
         } catch (Exception ignored) {}
         if (stableLeaderId <= 0 || !effectiveAlive.contains(stableLeaderId)) {
-            List<Integer> candidates = new ArrayList<>(effectiveAlive);
-            Collections.shuffle(candidates, new Random());
-            stableLeaderId = candidates.isEmpty() ? nodeId : candidates.get(0);
+            stableLeaderId = effectiveAlive.stream().min(Integer::compareTo).orElse(nodeId);
         }
         if (stableLeaderId != previousLeader) {
             electionEpoch = System.currentTimeMillis();
