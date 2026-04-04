@@ -1,98 +1,105 @@
-/**
- * CloudBox — Centralized API service.
- *
- * All backend communication goes through this module.
- * The Vite dev server proxies /api to the Spring Boot backend.
- */
-
 import axios from 'axios';
 
-const api = axios.create({
-  baseURL: '/api',
-  timeout: 30000,
+const PORTS = [8080, 8081, 8082, 8083, 8084];
+let portIdx = 0;
+
+const getBase = () => `http://localhost:${PORTS[portIdx]}/api`;
+
+// Short timeout so failover is fast (~800 ms instead of 5 s)
+const api = axios.create({ timeout: 800 });
+
+api.interceptors.request.use(cfg => {
+  if (!cfg.url.startsWith('http')) cfg.baseURL = getBase();
+  return cfg;
 });
 
-// ── File operations ──────────────────────────────────────────────
+api.interceptors.response.use(
+  res => res,
+  async err => {
+    const req = err.config;
+    const networkDown = !err.response || err.response.status === 503 || err.message === 'Network Error';
+    if (!networkDown || (req._retry ?? 0) >= PORTS.length) return Promise.reject(err);
+    req._retry = (req._retry ?? 0) + 1;
+    // Advance to next port and keep it sticky — don't cycle back to dead nodes
+    portIdx = (portIdx + 1) % PORTS.length;
+    req.baseURL = getBase();
+    // Give the retry slightly more room than the initial fast probe
+    req.timeout = 3000;
+    return api(req);
+  },
+);
 
-/**
- * Upload a file to a given folder path.
- * @param {File} file
- * @param {string} folderPath – e.g. "/" or "/docs/"
- */
-export async function uploadFile(file, folderPath = '/') {
+// ── Files ─────────────────────────────────────────────────────────────────
+
+export async function uploadFile(file, path = '/') {
   const form = new FormData();
   form.append('file', file);
-  form.append('path', folderPath);
+  form.append('path', path);
   const res = await api.post('/files/upload', form);
   return res.data;
 }
 
-/**
- * Download a file as a Blob.
- * @param {string} filePath – full logical path, e.g. "/docs/report.pdf"
- */
+export async function listFiles(path = '/') {
+  const res = await api.get('/files/list', { params: { path } });
+  return res.data.data;
+}
+
 export async function downloadFile(filePath) {
-  const res = await api.get('/files/download', {
-    params: { path: filePath },
-    responseType: 'blob',
-  });
+  const res = await api.get('/files/download', { params: { path: filePath }, responseType: 'blob' });
   return res.data;
 }
 
-/**
- * List contents of a folder.
- * @param {string} prefix – folder path, e.g. "/"
- */
-export async function listFiles(prefix = '/') {
-  const res = await api.get('/files/list', { params: { path: prefix } });
-  return res.data;
-}
-
-/**
- * Delete a file or folder.
- * @param {string} filePath
- */
 export async function deleteFile(filePath) {
   const res = await api.delete('/files/delete', { params: { path: filePath } });
   return res.data;
 }
 
-// ── Cluster status ───────────────────────────────────────────────
+// ── Fault tolerance ───────────────────────────────────────────────────────
 
-/** Get cluster-wide health overview. */
-export async function getClusterStatus() {
-  const res = await api.get('/cluster/status');
-  return res.data;
+export async function getFaultStatus() {
+  const res = await api.get('/fault/status');
+  return res.data.data;
 }
 
-/** Get consensus / leader info. */
+// ── Replication ───────────────────────────────────────────────────────────
+
+export async function getReplicationStatus() {
+  const res = await api.get('/files/replication-status');
+  return res.data.data;
+}
+
+// ── Consensus ─────────────────────────────────────────────────────────────
+
 export async function getConsensusStatus() {
-  const res = await api.get('/cluster/consensus');
-  return res.data;
+  const res = await api.get('/consensus/status');
+  return res.data.data;
 }
 
-/** Get time synchronization info. */
+// ── Time synchronization ──────────────────────────────────────────────────
+
 export async function getTimeSyncStatus() {
-  const res = await api.get('/cluster/time-sync');
-  return res.data;
+  const res = await api.get('/timesync/status');
+  return res.data.data;
 }
 
-// ── Admin / simulation ───────────────────────────────────────────
+export async function getTimeSyncStatusFromNode(nodeId) {
+  const res = await api.get(`http://localhost:${8079 + nodeId}/api/timesync/status`);
+  return res.data.data;
+}
 
-/** Simulate a node failure. */
+export async function getSkewReport() {
+  const res = await api.get('/timesync/skew-report');
+  return res.data.data;
+}
+
+// ── Admin simulation ──────────────────────────────────────────────────────
+
 export async function simulateFailure(nodeId) {
   const res = await api.post('/admin/simulate-failure', null, { params: { nodeId } });
   return res.data;
 }
 
-/** Simulate a node recovery. */
 export async function simulateRecovery(nodeId) {
   const res = await api.post('/admin/simulate-recovery', null, { params: { nodeId } });
-  return res.data;
-}
-
-/** Get node health. */
-export async function getNodeHealth() {
-  const res = await api.get('/health');
   return res.data;
 }

@@ -1,44 +1,22 @@
 package com.cloudbox.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
- * Generic API response wrapper.
+ * Unified API response envelope used by all REST endpoints.
  */
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class ApiResponse<T> {
-
-    private boolean success;
-    private String message;
-    private T data;
-
-    public static <T> ApiResponse<T> ok(T data) {
-        return ApiResponse.<T>builder()
-                .success(true)
-                .message("OK")
-                .data(data)
-                .build();
-    }
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public record ApiResponse<T>(boolean success, String message, T data) {
 
     public static <T> ApiResponse<T> ok(String message, T data) {
-        return ApiResponse.<T>builder()
-                .success(true)
-                .message(message)
-                .data(data)
-                .build();
+        return new ApiResponse<>(true, message, data);
+    }
+
+    public static <T> ApiResponse<T> ok(T data) {
+        return new ApiResponse<>(true, null, data);
     }
 
     public static <T> ApiResponse<T> error(String message) {
-        return ApiResponse.<T>builder()
-                .success(false)
-                .message(message)
-                .data(null)
-                .build();
+        return new ApiResponse<>(false, message, null);
     }
 }

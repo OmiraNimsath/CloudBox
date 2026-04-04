@@ -1,1 +1,11 @@
 @import "tailwindcss";
+
+/* Base typography */
+html { font-size: 106.25%; } /* 17px base — scales all rem-based Tailwind sizes */
+body { font-weight: 500; }
+
+/* Thin custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
