@@ -1,181 +1,105 @@
-/**
- * CloudBox — Centralized API service.
- *
- * All backend communication goes through this module.
- * The Vite dev server proxies /api to the Spring Boot backend.
- */
-
 import axios from 'axios';
 
-// Known backend node ports in the cluster
-const KNOWN_PORTS = [8080, 8081, 8082, 8083, 8084];
-let currentPortIndex = 0; // Start with the first node
+const PORTS = [8080, 8081, 8082, 8083, 8084];
+let portIdx = 0;
 
-// Helper to get current base URL
-const getBaseUrl = () => `http://localhost:${KNOWN_PORTS[currentPortIndex]}/api`;
+const getBase = () => `http://localhost:${PORTS[portIdx]}/api`;
 
-const api = axios.create({
-  baseURL: getBaseUrl(),
-  timeout: 5000, // shorter timeout to speed up failover
+// Short timeout so failover is fast (~800 ms instead of 5 s)
+const api = axios.create({ timeout: 800 });
+
+api.interceptors.request.use(cfg => {
+  if (!cfg.url.startsWith('http')) cfg.baseURL = getBase();
+  return cfg;
 });
 
-// Request interceptor to dynamically update the baseURL
-api.interceptors.request.use((config) => {
-  if (!config.url.startsWith('http')) {
-    config.baseURL = getBaseUrl();
-  }
-  return config;
-});
-
-// Response interceptor to handle transparent failover if a node goes down
 api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-    
-    // Determine if it's a network-level error (e.g. connection refused / server terminated) or a simulated failure (503)
-    const isNetworkError = !error.response || error.code === 'ECONNABORTED' || error.message === 'Network Error' || error.response.status === 503;
-    
-    if (!isNetworkError || (originalRequest._retryCount || 0) >= KNOWN_PORTS.length) {
-      return Promise.reject(error);
-    }
-    
-    originalRequest._retryCount = (originalRequest._retryCount || 0) + 1;
-    currentPortIndex = (currentPortIndex + 1) % KNOWN_PORTS.length;
-    console.warn(`[CloudBox] Node unreachable, failing over to next node at port ${KNOWN_PORTS[currentPortIndex]}`);
-    
-    originalRequest.baseURL = getBaseUrl();
-    return api(originalRequest);
-  }
+  res => res,
+  async err => {
+    const req = err.config;
+    const networkDown = !err.response || err.response.status === 503 || err.message === 'Network Error';
+    if (!networkDown || (req._retry ?? 0) >= PORTS.length) return Promise.reject(err);
+    req._retry = (req._retry ?? 0) + 1;
+    // Advance to next port and keep it sticky — don't cycle back to dead nodes
+    portIdx = (portIdx + 1) % PORTS.length;
+    req.baseURL = getBase();
+    // Give the retry slightly more room than the initial fast probe
+    req.timeout = 3000;
+    return api(req);
+  },
 );
 
-// ── File operations ──────────────────────────────────────────────
+// ── Files ─────────────────────────────────────────────────────────────────
 
-/**
- * Upload a file to a given folder path.
- * @param {File} file
- * @param {string} folderPath – e.g. "/" or "/docs/"
- */
-export async function uploadFile(file, folderPath = '/') {
+export async function uploadFile(file, path = '/') {
   const form = new FormData();
   form.append('file', file);
-  form.append('path', folderPath);
+  form.append('path', path);
   const res = await api.post('/files/upload', form);
   return res.data;
 }
 
-/**
- * Download a file as a Blob.
- * @param {string} filePath – full logical path, e.g. "/docs/report.pdf"
- */
-export async function downloadFile(filePath) {
-  const res = await api.get('/files/download', {
-    params: { path: filePath },
-    responseType: 'blob',
-  });
-  return res.data;
-}
-
-/**
- * List contents of a folder.
- * @param {string} prefix – folder path, e.g. "/"
- */
-export async function listFiles(prefix = '/') {
-  const res = await api.get('/files/list', { params: { path: prefix } });
+export async function listFiles(path = '/') {
+  const res = await api.get('/files/list', { params: { path } });
   return res.data.data;
 }
 
-/**
- * Delete a file or folder.
- * @param {string} filePath
- */
+export async function downloadFile(filePath) {
+  const res = await api.get('/files/download', { params: { path: filePath }, responseType: 'blob' });
+  return res.data;
+}
+
 export async function deleteFile(filePath) {
   const res = await api.delete('/files/delete', { params: { path: filePath } });
   return res.data;
 }
 
-// ── Cluster status ───────────────────────────────────────────────
+// ── Fault tolerance ───────────────────────────────────────────────────────
 
-/** Get cluster-wide health overview. */
-export async function getClusterStatus() {
-  const res = await api.get('/cluster/consensus/status');
-  const data = res.data.data;
-  
-  // Transform data format for frontend expectations { nodes: [{id, status, role}] }
-  const nodes = [];
-  let alive = 0;
-  if (data && data.nodeStatuses) {
-    for (const [id, status] of Object.entries(data.nodeStatuses)) {
-      const isAlive = status === 'HEALTHY' || status === 'ACTIVE';
-      if (isAlive) alive++;
-      nodes.push({
-        id: parseInt(id),
-        status: isAlive ? 'alive' : 'dead',
-        isLeader: data.leader?.leaderId === parseInt(id)
-      });
-    }
-  }
-  return { ...data, nodes, alive, total: Object.keys(data?.nodeStatuses || {}).length };
-}
-
-/** Get consensus / leader info. */
-export async function getConsensusStatus() {
-  const res = await api.get('/cluster/consensus/leader');
-  const data = res.data.data;
-  return { ...data, leader: data?.leaderId, epoch: data?.electionEpoch };
-}
-
-/** Get time synchronization info. */
-export async function getTimeSyncStatus() {
-  const res = await api.get('/timesync/status');
-  const data = res.data.data;
-  return {
-    ...data,
-    // Real Cristian's algorithm offset (ms → s for display)
-    offset: typeof data?.ntpOffsetMs === 'number' ? data.ntpOffsetMs / 1000 : 0,
-    // Last actual NTP/Cristian sync time; fall back to skew report timestamp
-    lastSync: data?.lastNtpSyncAt || data?.lastSyncAt,
-  };
-}
-
-// ── Admin / simulation ───────────────────────────────────────────
-
-/** Simulate a node failure. */
-export async function simulateFailure(nodeId) {
-  const res = await api.post('/admin/simulate-failure', null, { params: { nodeId } });
-  return res.data;
-}
-
-/** Simulate a node recovery. */
-export async function simulateRecovery(nodeId) {
-  const res = await api.post('/admin/simulate-recovery', null, { params: { nodeId } });
-  return res.data;
-}
-
-/** Get node health. */
-export async function getNodeHealth() {
-  const res = await api.get('/health');
-  return res.data;
-}
-
-// ── Fault tolerance ──────────────────────────────────────────────
-
-/** Get full fault tolerance status (cluster state, node health, recovery tasks, MTTF/MTTR). */
 export async function getFaultStatus() {
   const res = await api.get('/fault/status');
   return res.data.data;
 }
 
-// ── Replication ────────────────────────────────────────────────
+// ── Replication ───────────────────────────────────────────────────────────
 
-/** Get replication status for all files (RF, quorum, per-file replica counts). */
 export async function getReplicationStatus() {
   const res = await api.get('/files/replication-status');
   return res.data.data;
 }
 
-/** Get detailed clock-skew report (per-node skew, alerts, thresholds). */
+// ── Consensus ─────────────────────────────────────────────────────────────
+
+export async function getConsensusStatus() {
+  const res = await api.get('/consensus/status');
+  return res.data.data;
+}
+
+// ── Time synchronization ──────────────────────────────────────────────────
+
+export async function getTimeSyncStatus() {
+  const res = await api.get('/timesync/status');
+  return res.data.data;
+}
+
+export async function getTimeSyncStatusFromNode(nodeId) {
+  const res = await api.get(`http://localhost:${8079 + nodeId}/api/timesync/status`);
+  return res.data.data;
+}
+
 export async function getSkewReport() {
   const res = await api.get('/timesync/skew-report');
   return res.data.data;
+}
+
+// ── Admin simulation ──────────────────────────────────────────────────────
+
+export async function simulateFailure(nodeId) {
+  const res = await api.post('/admin/simulate-failure', null, { params: { nodeId } });
+  return res.data;
+}
+
+export async function simulateRecovery(nodeId) {
+  const res = await api.post('/admin/simulate-recovery', null, { params: { nodeId } });
+  return res.data;
 }

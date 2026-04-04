@@ -1,61 +1,125 @@
 package com.cloudbox.controller;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import java.util.Map;
+
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestTemplate;
 
-import com.cloudbox.config.ClusterConfig;
 import com.cloudbox.model.ApiResponse;
-import com.cloudbox.service.FailureDetectionService;
-import com.cloudbox.service.FaultToleranceManager;
-import lombok.extern.slf4j.Slf4j;
+import com.cloudbox.service.ConsensusService;
+import com.cloudbox.service.NodeRegistry;
+import com.cloudbox.service.ReplicationService;
 
-@Slf4j
+/**
+ * Admin endpoints: simulate node failure/recovery for demonstration,
+ * plus internal node-to-node replication endpoint.
+ */
 @RestController
-@RequestMapping("/api/admin")
 public class AdminController {
 
-    @Autowired
-    private FailureDetectionService failureDetectionService;
+    private final NodeRegistry nodeRegistry;
+    private final ReplicationService replicationService;
+    private final ConsensusService consensusService;
 
-    @Autowired
-    private FaultToleranceManager faultToleranceManager;
-
-    @Autowired
-    private RestTemplate restTemplate;
-
-    @PostMapping("/simulate-failure")
-    public ResponseEntity<ApiResponse<String>> simulateFailure(@RequestParam String nodeId) {
-        log.warn("Admin simulated failure for node: {}", nodeId);
-        try {
-            int nId = Integer.parseInt(nodeId.replace("node-", ""));
-            String nodeUrl = ClusterConfig.getNodeUrl(nId) + "/api/internal/simulate-failure?fail=true";
-            restTemplate.postForEntity(nodeUrl, null, String.class);
-        } catch (Exception e) {
-            log.error("Failed to forward simulate failure to node {}", nodeId, e);
-        }
-        // Do NOT instantly mark as failed — let heartbeat monitors on each node
-        // accumulate 3 consecutive missed beats naturally before declaring the node
-        // unhealthy. This matches realistic failure detection behaviour.
-        return ResponseEntity.ok(ApiResponse.ok("Node " + nodeId + " failure simulation started", "Success"));
+    public AdminController(NodeRegistry nodeRegistry,
+                           ReplicationService replicationService,
+                           ConsensusService consensusService) {
+        this.nodeRegistry = nodeRegistry;
+        this.replicationService = replicationService;
+        this.consensusService = consensusService;
     }
 
-    @PostMapping("/simulate-recovery")
-    public ResponseEntity<ApiResponse<String>> simulateRecovery(@RequestParam String nodeId) {
-        log.info("Admin simulated recovery for node: {}", nodeId);
-        try {
-            int nId = Integer.parseInt(nodeId.replace("node-", ""));
-            String nodeUrl = ClusterConfig.getNodeUrl(nId) + "/api/internal/simulate-failure?fail=false";
-            restTemplate.postForEntity(nodeUrl, null, String.class);
-        } catch (Exception e) {
-            log.error("Failed to forward simulate recovery to node {}", nodeId, e);
+    // ── Admin simulation ──────────────────────────────────────────────────
+
+    @PostMapping("/api/admin/simulate-failure")
+    public ApiResponse<String> simulateFailure(@RequestParam int nodeId) {
+        nodeRegistry.broadcastSimulatedFailure(nodeId);
+        return ApiResponse.ok("Node " + nodeId + " failure simulated", "ok");
+    }
+
+    @PostMapping("/api/admin/simulate-recovery")
+    public ApiResponse<String> simulateRecovery(@RequestParam int nodeId) {
+        nodeRegistry.broadcastSimulatedRecovery(nodeId);
+        return ApiResponse.ok("Node " + nodeId + " recovery simulated", "ok");
+    }
+
+    @PostMapping("/api/internal/mark-failed")
+    public ResponseEntity<Void> markFailed(@RequestParam int nodeId) {
+        nodeRegistry.simulateFailure(nodeId);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/api/internal/mark-recovered")
+    public ResponseEntity<Void> markRecovered(@RequestParam int nodeId) {
+        nodeRegistry.simulateRecovery(nodeId);
+        return ResponseEntity.ok().build();
+    }
+
+    // ── Internal replication (node-to-node) ───────────────────────────────
+
+    /** Receives a file replica pushed by the primary after a quorum write. */
+    @PostMapping("/api/internal/replicate")
+    public ResponseEntity<Void> acceptReplica(
+            @RequestParam String fileId,
+            @RequestParam(defaultValue = "0") long timestamp,
+            @RequestParam(defaultValue = "0") long uploadedAt,
+            @RequestBody byte[] content) {
+        replicationService.acceptReplica(fileId, content, timestamp, uploadedAt);
+        return ResponseEntity.ok().build();
+    }
+
+    /** HEAD probe: returns 200 if this node has the file, 404 otherwise. */
+    @RequestMapping(value = "/api/internal/replicate", method = RequestMethod.HEAD)
+    public ResponseEntity<Void> hasReplica(@RequestParam String fileId) {
+        return replicationService.existsLocally(fileId)
+                ? ResponseEntity.ok().build()
+                : ResponseEntity.notFound().build();
+    }
+
+    /** DELETE replica on this node (used during distributed delete). */
+    @DeleteMapping("/api/internal/replicate")
+    public ResponseEntity<Void> deleteReplica(@RequestParam String fileId) {
+        replicationService.deleteLocal(fileId);
+        return ResponseEntity.ok().build();
+    }
+
+    // ── Health ping (used by heartbeat monitor) ───────────────────────────
+
+    @GetMapping("/api/health")
+    public ResponseEntity<ApiResponse<String>> health() {
+        if (nodeRegistry.isSelfFailed()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(ApiResponse.ok("SIMULATED_FAILURE"));
         }
-        failureDetectionService.clearFailureStatus(nodeId.startsWith("node-") ? nodeId : "node-" + nodeId);
-        faultToleranceManager.recordRecovery(nodeId.startsWith("node-") ? nodeId : "node-" + nodeId);
-        return ResponseEntity.ok(ApiResponse.ok("Node " + nodeId + " marked as recovered", "Success"));
+        return ResponseEntity.ok(ApiResponse.ok("UP"));
+    }
+
+    @PostMapping("/api/internal/consensus-sync")
+    public ResponseEntity<Void> consensusSync(@RequestParam long epoch, @RequestParam long zxid) {
+        consensusService.acceptEpochZxid(epoch, zxid);
+        return ResponseEntity.ok().build();
+    }
+
+    // ── Metrics gossip ────────────────────────────────────────────────────
+
+    /** Returns this node's current metrics snapshot (pulled by peers on startup). */
+    @GetMapping("/api/internal/metrics-snapshot")
+    public ResponseEntity<Map<String, Object>> metricsSnapshot() {
+        return ResponseEntity.ok(nodeRegistry.exportMetrics());
+    }
+
+    /** Receives a metrics snapshot pushed by a peer during gossip. */
+    @PostMapping("/api/internal/metrics-sync")
+    public ResponseEntity<Void> metricsSync(@RequestBody Map<String, Object> snapshot) {
+        nodeRegistry.importMetrics(snapshot);
+        return ResponseEntity.ok().build();
     }
 }

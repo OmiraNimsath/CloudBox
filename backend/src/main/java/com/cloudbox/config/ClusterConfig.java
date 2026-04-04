@@ -1,49 +1,48 @@
 package com.cloudbox.config;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestTemplate;
+
+import java.time.Duration;
+
 /**
- * Shared cluster constants used by all modules.
+ * Central cluster constants and shared Spring beans.
  *
- * These values match the team's technical specifications:
- * - 5 nodes, quorum = 3, RF = 5, 100 MB max file size.
+ * 5-node cluster: ports 8080–8084.
+ * Quorum = ceil(N/2) + 1 = 3, ensuring writes survive up to 2 node failures.
+ * Replication factor = 5 (every file is replicated to all nodes).
  */
-public final class ClusterConfig {
+@Configuration
+public class ClusterConfig {
 
-    private ClusterConfig() {}
-
-    /** Total number of nodes in the cluster. */
+    /** Total nodes in the cluster. */
     public static final int NODE_COUNT = 5;
 
-    /** Minimum nodes required for a quorum (ceil(N/2) + 1 = 3). */
+    /** Minimum live nodes required for quorum writes. */
     public static final int QUORUM_SIZE = 3;
 
-    /** Replication factor — every file is replicated to all nodes. */
+    /** Minimum nodes that must confirm a file exists before a read is served. */
+    public static final int READ_QUORUM = 2;
+
+    /** Every file is replicated to all nodes. */
     public static final int REPLICATION_FACTOR = 5;
 
-    /** Maximum upload file size in bytes (100 MB). */
-    public static final long MAX_FILE_SIZE = 100L * 1024 * 1024;
-
-    /** Base port for the first node; nodes use ports 8080–8084. */
+    /** First node port; node N uses port BASE_PORT + (N - 1). */
     public static final int BASE_PORT = 8080;
 
-    /** ZooKeeper connection string. */
-    public static final String ZK_CONNECTION = "localhost:2181";
-
-    /** ZooKeeper namespace for CloudBox. */
-    public static final String ZK_NAMESPACE = "/cloudbox";
-
-    /** ZooKeeper path for leader election. */
-    public static final String ZK_ELECTION_PATH = ZK_NAMESPACE + "/election";
-
-    /** ZooKeeper path for cluster members. */
-    public static final String ZK_MEMBERS_PATH = ZK_NAMESPACE + "/members";
-
-    /** ZooKeeper path for distributed locks. */
-    public static final String ZK_LOCKS_PATH = ZK_NAMESPACE + "/locks";
-
-    /**
-     * Get the HTTP base URL for a given node ID (1-based).
-     */
-    public static String getNodeUrl(int nodeId) {
+    /** Build the HTTP base URL for a given node id (1-based). */
+    public static String nodeUrl(int nodeId) {
         return "http://localhost:" + (BASE_PORT + nodeId - 1);
+    }
+
+    @Bean
+    public RestTemplate restTemplate(RestTemplateBuilder builder) {
+        return builder
+                .setConnectTimeout(Duration.ofSeconds(2))
+                .setReadTimeout(Duration.ofSeconds(3))
+                .build();
     }
 }

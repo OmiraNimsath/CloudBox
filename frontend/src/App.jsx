@@ -1,9 +1,3 @@
-/**
- * CloudBox — Root application component.
- *
- * Routes between Dashboard (file manager) and Cluster Status views.
- */
-
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -14,7 +8,7 @@ import ClusterView from './pages/ClusterView.jsx';
 import FaultTolerancePage from './pages/FaultTolerancePage.jsx';
 import ReplicationPage from './pages/ReplicationPage.jsx';
 import TimeSyncPage from './pages/TimeSyncPage.jsx';
-import { getClusterStatus } from './services/api.js';
+import { getFaultStatus } from './services/api.js';
 
 function AppContent() {
   const navigate = useNavigate();
@@ -23,7 +17,7 @@ function AppContent() {
 
   const fetchCluster = useCallback(async () => {
     try {
-      const data = await getClusterStatus();
+      const data = await getFaultStatus();
       setClusterInfo(data);
     } catch {
       /* backend not running yet */
@@ -42,14 +36,14 @@ function AppContent() {
   };
 
   return (
-    <div className="flex flex-col h-screen">
-      <Header
-        clusterInfo={clusterInfo}
-        onUploadClick={handleUploadClick}
-      />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
+    <div className="flex h-screen bg-gray-50">
+      <Sidebar />
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <Header
+          clusterInfo={clusterInfo}
+          onUploadClick={handleUploadClick}
+        />
+        <main className="flex-1 overflow-y-auto p-6">
           <Routes>
             <Route
               path="/"

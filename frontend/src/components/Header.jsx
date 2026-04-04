@@ -1,48 +1,51 @@
-/**
- * CloudBox — Header component (OneDrive-style top bar).
- *
- * Logo, search placeholder, cluster health dot, and Upload button.
- */
-
-import { FiCloud, FiUploadCloud } from 'react-icons/fi';
+import { FiUploadCloud } from 'react-icons/fi';
 
 export default function Header({ clusterInfo, onUploadClick }) {
-  const aliveCount = clusterInfo?.alive ?? 0;
-  const totalCount = clusterInfo?.total ?? 0;
+  const aliveCount = clusterInfo?.healthyNodes ?? 0;
+  const totalCount = clusterInfo?.totalNodes ?? 5;
+  const state = clusterInfo?.clusterState;
 
-  const dotColor =
-    aliveCount === totalCount && totalCount > 0
-      ? 'bg-green-500'
-      : aliveCount >= Math.ceil(totalCount / 2)
-        ? 'bg-yellow-400'
-        : 'bg-red-500';
+  const pillStyle = !clusterInfo
+    ? 'bg-gray-100 text-gray-500'
+    : state === 'HEALTHY'
+      ? 'bg-green-100 text-green-700'
+      : state === 'DEGRADED'
+        ? 'bg-yellow-100 text-yellow-700'
+        : 'bg-red-100 text-red-700';
 
-  const clusterLabel = clusterInfo
-    ? `${aliveCount}/${totalCount} nodes`
-    : 'connecting…';
+  const dotBase = !clusterInfo
+    ? 'bg-gray-400'
+    : state === 'HEALTHY' ? 'bg-green-500'
+    : state === 'DEGRADED' ? 'bg-yellow-500'
+    : 'bg-red-500';
+
+  const dotPing = !clusterInfo
+    ? ''
+    : state === 'HEALTHY' ? 'bg-green-400'
+    : state === 'DEGRADED' ? 'bg-yellow-400'
+    : 'bg-red-400';
 
   return (
-    <header className="flex items-center justify-between h-12 px-4 bg-[#0078d4] text-white select-none">
-      {/* Left — logo */}
-      <div className="flex items-center gap-3 text-base font-semibold">
-        <FiCloud className="text-xl" />
-        <span>CloudBox</span>
+    <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-end px-6 gap-3 shrink-0">
+      {/* Cluster health pill */}
+      <div className={`flex items-center gap-2 text-sm font-semibold px-3 py-1.5 rounded-full select-none ${pillStyle}`}>
+        <span className="relative flex h-2 w-2">
+          {clusterInfo && (
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${dotPing}`} />
+          )}
+          <span className={`relative inline-flex rounded-full h-2 w-2 ${dotBase}`} />
+        </span>
+        {clusterInfo ? `${aliveCount}/${totalCount} nodes · ${state}` : 'Connecting…'}
       </div>
 
-      {/* Right — cluster + upload */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 text-xs text-white/80">
-          <span className={`w-2 h-2 rounded-full ${dotColor}`} />
-          <span>{clusterLabel}</span>
-        </div>
-
-        <button
-          onClick={onUploadClick}
-          className="flex items-center gap-1.5 text-xs font-semibold bg-white/15 hover:bg-white/25 border border-white/30 rounded px-3 py-1 transition"
-        >
-          <FiUploadCloud /> Upload
-        </button>
-      </div>
+      {/* Upload */}
+      <button
+        onClick={onUploadClick}
+        className="flex items-center gap-2 text-sm font-semibold bg-[#0078d4] hover:bg-[#106ebe] text-white px-4 py-2 rounded-lg transition shadow-sm"
+      >
+        <FiUploadCloud size={15} />
+        Upload
+      </button>
     </header>
   );
 }
