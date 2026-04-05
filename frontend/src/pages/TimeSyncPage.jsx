@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { FiClock, FiActivity, FiStar } from 'react-icons/fi';
 import { getTimeSyncStatus, getTimeSyncStatusFromNode, getSkewReport } from '../services/api.js';
 
-const POLL_MS = 6000;
+const POLL_MS = 1000;
 
 function msAgo(ts) {
   if (!ts) return '-';

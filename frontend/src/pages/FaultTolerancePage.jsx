@@ -2,7 +2,7 @@
 import { FiAlertTriangle, FiActivity, FiShield } from 'react-icons/fi';
 import { getFaultStatus, simulateFailure, simulateRecovery } from '../services/api.js';
 
-const POLL_MS = 5000;
+const POLL_MS = 1000;
 
 function fmtHeartbeat(ms) {
   if (!ms) return 'never';

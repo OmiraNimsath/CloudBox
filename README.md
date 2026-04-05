@@ -224,7 +224,7 @@ CloudBox/
 | **Cluster size** | 5 nodes (ports 8080–8084) |
 | **Quorum** | 3 (tolerates 2 failures) |
 | **Replication factor** | 5 (all nodes) |
-| **Consistency** | Quorum writes + leader reads |
+| **Consistency** | Quorum writes + Quorum reads |
 | **Consensus** | ZAB (ZooKeeper Atomic Broadcast) |
 | **Time sync** | Berkeley Algorithm (RTT-compensated, push-based correction deltas) |
 | **Logical clocks** | Hybrid Logical Clock + Lamport timestamps |
@@ -239,7 +239,7 @@ CloudBox/
 |----------|-----------|
 | **Berkeley Algorithm (not Cristian's)** | Berkeley is active/push-based — the master collects all peer times and pushes corrections; no single time-server authority is needed. This handles the case where any node can become master. |
 | **ZAB via ZooKeeper Curator** | Curator `LeaderSelector` handles the full ephemeral-znode election lifecycle; ZAB's epoch/ZXID semantics give total-order broadcast without implementing Paxos/Raft from scratch. |
-| **Quorum writes W=3, reads R=2, N=5** | W+R=5=N ≥ N guarantees at least one node is in both the write and read sets, ensuring read-your-writes consistency while tolerating up to 2 failures. |
+| **Quorum writes W=3, reads R=3, N=5** | W+R=6 ≥ N guarantees at least one node is in both the write and read sets, ensuring read-your-writes consistency while tolerating up to 2 failures. |
 | **Full replication RF=5 (not erasure coding)** | Maximises read availability and simplifies the failure/recovery demonstration. Every node always has a complete copy. Trade-off: higher storage cost vs. erasure coding's lower overhead. |
 | **Berkeley master = lowest alive node ID** | Deterministic election without ZooKeeper coordination - every node independently arrives at the same master ID using the same `min(aliveIds)` rule, avoiding split-brain from ZK unavailability. |
 | **Self-healing every 5 s** | Fast post-recovery convergence. After a node rejoins, any missing replicas are pushed within 5 s without operator intervention. |
@@ -255,7 +255,7 @@ CloudBox/
 | Criterion (20% each) | Where Implemented | Key Classes |
 |----------------------|-------------------|-------------|
 | **Fault Tolerance** | Heartbeat-based failure detection (3 s / 3 miss), self-healing re-replication (5 s), tombstone deletes, MTTF/MTTR/Availability metrics, simulate-failure/recovery admin API | `NodeRegistry`, `ReplicationService.healUnderReplicatedFiles()`, `FaultController`, `AdminController` |
-| **Data Replication & Consistency** | Quorum writes (W=3), quorum reads (R=2), last-write-wins (Lamport), pending-delete tombstones, per-file distribution status | `ReplicationService`, `FileController`, `ReplicationStatus` |
+| **Data Replication & Consistency** | Quorum writes (W=3), quorum reads (R=3), last-write-wins (Lamport), pending-delete tombstones, per-file distribution status | `ReplicationService`, `FileController`, `ReplicationStatus` |
 | **Time Synchronization** | Berkeley Algorithm (RTT-compensated, master=min-alive-ID), HLC, Lamport timestamps, skew alerts, round summary broadcast, persistence across restarts | `TimeSyncService`, `TimeSyncController` |
 | **Consensus & Agreement** | ZAB via Curator LeaderSelector (ephemeral sequential znodes), epoch/ZXID total-order, leader heartbeat every 3 s, partition detection, quorum-gated writes | `ConsensusService`, `ConsensusController` |
 | **Overall Integration** | File upload pipeline: HLC tick → Lamport tick → quorum replicate → ZXID increment → 5-node fan-out. Frontend shows all four modules live with 5 s auto-refresh. | All controllers + services wired together; `api.js` multi-node failover |

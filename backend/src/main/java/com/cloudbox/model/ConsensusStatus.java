@@ -5,9 +5,9 @@ import java.util.List;
 /**
  * Consensus / leader-election state snapshot.
  *
- * Implements Raft-style leader election: nodes compete for leadership
- * using ZooKeeper ephemeral sequential nodes. The node with the lowest
- * sequential znode becomes leader. Epoch increments on each election.
+ * Implements ZAB (ZooKeeper Atomic Broadcast) leader election via Curator LeaderSelector:
+ * nodes compete for leadership using ZooKeeper ephemeral sequential nodes. The node with
+ * the lowest sequential znode becomes leader. Epoch increments on each election.
  */
 public record ConsensusStatus(
         int leaderId,

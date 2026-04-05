@@ -2,7 +2,7 @@
 import { FiServer, FiRefreshCw, FiZap, FiWifi, FiWifiOff } from 'react-icons/fi';
 import { getFaultStatus, getConsensusStatus, simulateFailure, simulateRecovery } from '../services/api.js';
 
-const POLL_MS = 5000;
+const POLL_MS = 1000;
 
 export default function ClusterView() {
   const [fault, setFault] = useState(null);
@@ -65,7 +65,7 @@ export default function ClusterView() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Cluster Status</h1>
-          <p className="text-sm text-gray-400 mt-0.5">5-node ZAB cluster · auto-refreshes every 5s</p>
+          <p className="text-sm text-gray-400 mt-0.5">5-node ZAB cluster · auto-refreshes every 1s</p>
         </div>
         <button
           onClick={refresh}

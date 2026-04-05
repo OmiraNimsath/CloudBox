@@ -79,18 +79,21 @@ export default function FileCard({ entry, onDownload, onDelete }) {
         )}
       </div>
 
-      {/* Berkeley-corrected upload time */}
+      {/* Berkeley-corrected upload time + Lamport timestamp */}
       {entry.uploadedAtMs > 0 && (
-        <div className="mt-1.5 flex items-center gap-1">
-            <span className="text-[10px] text-gray-400 font-mono">
+        <div className="mt-1.5 flex items-center justify-between gap-1">
+          <span className="text-[10px] text-gray-400 font-mono">
             {(() => {
               const d = new Date(entry.uploadedAtMs);
               const hh = String(d.getHours()).padStart(2, '0');
               const mm = String(d.getMinutes()).padStart(2, '0');
               const ss = String(d.getSeconds()).padStart(2, '0');
               const ms = String(d.getMilliseconds()).padStart(3, '0');
-              return `${hh}:${mm}:${ss}:${ms}`;
+              return `${hh}:${mm}:${ss}.${ms}`;
             })()}
+          </span>
+          <span className="text-[10px] font-mono text-purple-400" title="Lamport logical timestamp">
+            L:{entry.logicalTimestamp ?? 0}
           </span>
         </div>
       )}

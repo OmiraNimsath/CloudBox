@@ -2,7 +2,7 @@
 import { FiDatabase, FiLayers } from 'react-icons/fi';
 import { getReplicationStatus } from '../services/api.js';
 
-const POLL_MS = 8000;
+const POLL_MS = 1000;
 
 export default function ReplicationPage() {
   const [status, setStatus] = useState(null);
@@ -11,7 +11,7 @@ export default function ReplicationPage() {
   useEffect(() => {
     async function load() {
       try { const data = await getReplicationStatus(); setStatus(data); setError(null); }
-      catch { setError('Backend unreachable â€” retryingâ€¦'); }
+      catch { setError('Backend unreachable - retrying...'); }
     }
     load();
     const id = setInterval(load, POLL_MS);
@@ -19,7 +19,7 @@ export default function ReplicationPage() {
   }, []);
 
   if (error && !status) return <div className="p-6 text-red-500">{error}</div>;
-  if (!status) return <div className="p-6 text-gray-400">Loading replication statusâ€¦</div>;
+  if (!status) return <div className="p-6 text-gray-400">Loading replication status...</div>;
 
   const { replicationFactor, quorumSize, totalFiles, fullyReplicatedFiles, underReplicatedFiles, consistencyModel, files } = status;
 

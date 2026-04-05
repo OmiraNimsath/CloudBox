@@ -61,9 +61,8 @@ export default function FileList({ entries, onDownload, onDelete, title = 'Files
               <tr>
                 <th className="px-4 py-3 text-left font-medium text-gray-500">Name</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-500">Size</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-500">
-                  Uploaded At
-                </th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500">Uploaded At</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-500">Version</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-500 w-24">Actions</th>
               </tr>
             </thead>
@@ -92,8 +91,13 @@ export default function FileList({ entries, onDownload, onDelete, title = 'Files
                         const mm = String(d.getMinutes()).padStart(2, '0');
                         const ss = String(d.getSeconds()).padStart(2, '0');
                         const ms = String(d.getMilliseconds()).padStart(3, '0');
-                        return `${hh}:${mm}:${ss}:${ms}`;
+                        return `${hh}:${mm}:${ss}.${ms}`;
                       })() : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs font-mono text-purple-400" title="Lamport logical timestamp">
+                        L:{entry.logicalTimestamp ?? 0}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
