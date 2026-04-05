@@ -103,7 +103,15 @@ cd backend
 
 The API server starts on `http://localhost:8080` by default.
 
-To run a **5-node cluster**, launch each node with a different port and node ID:
+To run a **5-node cluster**, use the provided startup script from the project root:
+
+```powershell
+.\start.ps1
+```
+
+This opens 6 PowerShell windows — one per backend node (ports 8080–8084) and one for the frontend. Close individual windows to stop specific nodes.
+
+Alternatively, launch each node manually:
 
 ```bash
 ./mvnw spring-boot:run "-Dspring-boot.run.arguments=--server.port=8080 --cloudbox.node-id=1"
