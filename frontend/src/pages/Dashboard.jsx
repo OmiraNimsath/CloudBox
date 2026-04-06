@@ -1,127 +1,90 @@
-/**
- * CloudBox — Dashboard page (file manager).
- *
- * Breadcrumb navigation, folder browsing, download, delete, and upload modal.
- */
-
 import { useState, useEffect, useCallback } from 'react';
-import { FiHome, FiChevronRight } from 'react-icons/fi';
+import { FiUploadCloud } from 'react-icons/fi';
 import FileList from '../components/FileList.jsx';
 import UploadModal from '../components/UploadModal.jsx';
 import { listFiles, downloadFile, deleteFile } from '../services/api.js';
 
 export default function Dashboard({ uploadModalOpen, setUploadModalOpen }) {
-  const [currentPath, setCurrentPath] = useState('/');
   const [entries, setEntries] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  /* ── Fetch folder contents ───────────────────────────────── */
-  const fetchEntries = useCallback(async (path) => {
+  const fetchEntries = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await listFiles(path);
-      setEntries(data.entries ?? data);
-    } catch {
-      setError('Failed to load files');
+      const data = await listFiles('/');
+      setEntries(Array.isArray(data) ? data : []);
+    } catch (err) {
+      if (err?.response?.status === 503) {
+        setError('Read quorum not reached — too many nodes unavailable');
+      } else {
+        setError('Failed to load files — is the backend running?');
+      }
       setEntries([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchEntries(currentPath); }, [currentPath, fetchEntries]);
-
-  /* ── Breadcrumb pieces ───────────────────────────────────── */
-  const breadcrumbs = [];
-  if (currentPath !== '/') {
-    const parts = currentPath.replace(/^\//, '').replace(/\/$/, '').split('/');
-    let accum = '/';
-    for (const p of parts) {
-      accum += p + '/';
-      breadcrumbs.push({ label: p, path: accum });
-    }
-  }
-
-  /* ── Actions ─────────────────────────────────────────────── */
-  const handleNavigate = (entry) => {
-    const next = currentPath === '/' ? `/${entry.name}/` : `${currentPath}${entry.name}/`;
-    setCurrentPath(next);
-  };
+  useEffect(() => { fetchEntries(); }, [fetchEntries]);
 
   const handleDownload = async (entry) => {
     try {
-      const filePath = currentPath === '/' ? `/${entry.name}` : `${currentPath}${entry.name}`;
-      const blob = await downloadFile(filePath);
+      const blob = await downloadFile('/' + entry.name);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
-      a.download = entry.name;
-      a.click();
+      a.href = url; a.download = entry.name; a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      setError('Download failed');
-    }
+    } catch { setError('Download failed'); }
   };
 
   const handleDelete = async (entry) => {
     if (!window.confirm(`Delete "${entry.name}"?`)) return;
-    try {
-      const filePath = currentPath === '/' ? `/${entry.name}` : `${currentPath}${entry.name}`;
-      await deleteFile(filePath);
-      fetchEntries(currentPath);
-    } catch {
-      setError('Delete failed');
-    }
+    try { await deleteFile('/' + entry.name); fetchEntries(); }
+    catch { setError('Delete failed'); }
   };
 
-  const folderTitle = currentPath === '/' ? 'My Files' : currentPath.replace(/\/$/, '').split('/').pop();
-
   return (
-    <>
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 mb-5 text-sm text-gray-500">
-        <span className="flex items-center gap-1 cursor-pointer hover:text-[#0078d4] transition" onClick={() => setCurrentPath('/')}>
-          <FiHome /> My Files
-        </span>
-        {breadcrumbs.map((bc) => (
-          <span key={bc.path} className="flex items-center gap-1">
-            <FiChevronRight className="text-gray-300" />
-            <span className="cursor-pointer hover:text-[#0078d4] transition" onClick={() => setCurrentPath(bc.path)}>
-              {bc.label}
-            </span>
-          </span>
-        ))}
-      </nav>
+    <div>
+      {/* Page header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">My Files</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Distributed across all cluster nodes</p>
+        </div>
+        <button
+          onClick={() => setUploadModalOpen(true)}
+          className="flex items-center gap-2 text-sm font-semibold bg-[#0078d4] hover:bg-[#106ebe] text-white px-4 py-2.5 rounded-xl transition shadow-sm"
+        >
+          <FiUploadCloud size={15} /> Upload Files
+        </button>
+      </div>
 
-      {/* Error banner */}
-      {error && <div className="mb-4 bg-red-50 text-red-700 px-3 py-2 rounded text-[13px]">{error}</div>}
+      {error && (
+        <div className="mb-4 bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>
+      )}
 
-      {/* File listing */}
       {loading ? (
-        <div className="flex flex-col items-center gap-3 py-12 text-gray-400 text-sm">
-          <div className="w-8 h-8 border-3 border-gray-200 border-t-[#0078d4] rounded-full animate-spin" />
-          Loading…
+        <div className="flex flex-col items-center gap-3 py-24 text-gray-400 text-sm">
+          <div className="w-10 h-10 border-4 border-gray-100 border-t-[#0078d4] rounded-full animate-spin" />
+          Loading files…
         </div>
       ) : (
         <FileList
           entries={entries ?? []}
-          title={folderTitle}
-          onNavigate={handleNavigate}
+          title="All Files"
           onDownload={handleDownload}
           onDelete={handleDelete}
         />
       )}
 
-      {/* Upload modal */}
       {uploadModalOpen && (
         <UploadModal
-          currentPath={currentPath}
           onClose={() => setUploadModalOpen(false)}
-          onUploaded={() => fetchEntries(currentPath)}
+          onUploaded={fetchEntries}
         />
       )}
-    </>
+    </div>
   );
 }
